@@ -14,8 +14,18 @@ from datetime import date
 
 from ..estimators import estimate_attempts
 from ..models import PlayerDay, PlayerLine, RosterDay
-from ..projections import project_period_line
+from ..optimize import Candidate, Slot
 from .base import LeaguePlatform
+
+# Best-guess 9 active-slot configuration for this NBA league (eligibility uses
+# Fantrax's own position tagging: a slot accepts a player tagged with its name;
+# Flex accepts anyone). Multiplicities should be confirmed from league settings.
+DEFAULT_NBA_SLOTS: list[Slot] = [
+    Slot("PG", frozenset({"PG"})), Slot("SG", frozenset({"SG"})),
+    Slot("G", frozenset({"G"})), Slot("SF", frozenset({"SF"})),
+    Slot("PF", frozenset({"PF"})), Slot("F", frozenset({"F"})),
+    Slot("C", frozenset({"C"})), Slot("Flx"), Slot("Flx"),
+]
 
 # Per-player *daily total* stat ids (getLiveScoringStats -> object2).
 DAILY_STAT_SCIP: dict[int, str] = {
@@ -101,6 +111,16 @@ def decode_roster_stats(stats_table: dict) -> dict[str, PlayerLine]:
     return out
 
 
+def decode_roster_positions(stats_table: dict) -> dict[str, tuple[str, ...]]:
+    """Map scorerId -> eligible position short-names from a roster table."""
+    out: dict[str, tuple[str, ...]] = {}
+    for row in stats_table.get("rows", []):
+        scorer = row.get("scorer")
+        if scorer:
+            out[scorer["scorerId"]] = tuple((scorer.get("posShortNames") or "").split(","))
+    return out
+
+
 def players_with_game(stats_table: dict) -> set[str]:
     """Scorer ids that have a game on the day this STATS table was fetched.
 
@@ -176,31 +196,44 @@ class FantraxPlatform(LeaguePlatform):
         sp = self._league.scoring_periods[period]
         return [num for num, d in sorted(self._league.scoring_dates.items()) if sp.start <= d <= sp.end]
 
-    def projected_roster_lines(self, team_id: str, period: int) -> dict[str, PlayerLine]:
-        """A-expected projection: season-to-date per-game rates (as of period
-        start) scaled by each player's games scheduled in the matchup period.
+    def period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
+        """Per-day candidate pool for the optimizer (A-expected).
 
-        Sweeps the matchup week's daily roster views once each: the first day
-        supplies the rates; every day contributes to per-player game counts via
-        the Opponent column. Players added mid-period are not projected (v1).
+        Each day lists the players who have a game that day, carrying their
+        season-to-date per-game line (as of the period start) and eligible
+        positions. Summing a player's candidate days reproduces their projected
+        period total, so the optimizer's "start everyone" equals the projection.
+        Players added mid-period are not projected (v1).
         """
         days = self.matchup_period_days(period)
         if not days:
-            return {}
+            return []
+        day_tables = {dp: self._roster_stats_tables(team_id, dp) for dp in days}
+
         rates: dict[str, PlayerLine] = {}
-        games: dict[str, int] = {}
-        for i, daily_period in enumerate(days):
-            tables = self._roster_stats_tables(team_id, daily_period)
-            if i == 0:
-                for table in tables:
-                    rates.update(decode_roster_stats(table))
-            for table in tables:
-                for pid in players_with_game(table):
-                    games[pid] = games.get(pid, 0) + 1
-        return {
-            pid: project_period_line(rate, games.get(pid, 0))
-            for pid, rate in rates.items()
-        }
+        positions: dict[str, tuple[str, ...]] = {}
+        for table in day_tables[days[0]]:  # rates/eligibility as of period start
+            rates.update(decode_roster_stats(table))
+            positions.update(decode_roster_positions(table))
+
+        per_day: list[list[Candidate]] = []
+        for dp in days:
+            playing: set[str] = set()
+            for table in day_tables[dp]:
+                playing |= players_with_game(table)
+            per_day.append([
+                Candidate(pid, rates[pid], positions.get(pid, ()))
+                for pid in playing if pid in rates
+            ])
+        return per_day
+
+    def projected_roster_lines(self, team_id: str, period: int) -> dict[str, PlayerLine]:
+        """A-expected per-player projected period totals (sum of candidate days)."""
+        totals: dict[str, PlayerLine] = {}
+        for day in self.period_candidates(team_id, period):
+            for cand in day:
+                totals[cand.player_id] = totals.get(cand.player_id, PlayerLine()) + cand.line
+        return totals
 
     # --- Remaining fetch methods: next sub-steps of the build -----------------
 

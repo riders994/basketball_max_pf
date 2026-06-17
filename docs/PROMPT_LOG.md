@@ -168,3 +168,15 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Implemented `FantraxPlatform.projected_roster_lines(team_id, period)`: season-to-date per-game rates as of the period's first day, scaled per player by games-in-period; `matchup_period_days()` maps a matchup period to its daily periods. Renamed the base interface method `projected_player_lines` → `projected_roster_lines(team_id, period)` (team-scoped is what the optimizer consumes). v1 simplification: players added mid-period are not projected.
 - Live-validated on `wserh14rmbbpqtcg` period 4: 7 daily periods, 14 players with games, implied 3–4 games/player, projected lines scale correctly, FG%/FT% in range. **Suite: 13 passing.**
 - Next up: build step #2/#3 — `roster_day` + games-played caps, then the daily best-response optimizer (`optimize.best_response`).
+
+## Prompt 13 — 2026-06-16
+
+> yes, work on the optimizer and with the same commit cadence
+
+*Response notes:*
+- Probed constraint structure (league `wserh14rmbbpqtcg`): **9 active slots** (types PG, SG, G, SF, PF, F, C, Flx; Fantrax pre-tags players with the combo positions they qualify for, so slot eligibility = slot name ∈ player positions, Flex = any). **No games-played caps** (all position min/max = None). → only binding constraint is the daily 9-slot capacity with eligibility; cross-day coupling is purely via the objective, so FG%/FT%/TO punting is the lever (no games budget).
+- Built `optimize.py` (pure): `Slot`/`Candidate` types, bipartite feasibility (`can_assign` augmenting-path matcher), greedy value construction, and `best_response(daily_candidates, slots, target)` = local search maximizing (points_for, then normalized category margin) — discovers efficiency/punting (e.g. benching a brick shooter to flip FG%, dropping a high-TO player). Games caps omitted (none in this league); clean seam to add later.
+- For A-expected, candidates are per-(player, day): the per-game rate line placed on each day the player has a game (so starting everyone sums to the projected period total). Added `FantraxPlatform.period_candidates(team_id, period)`; refactored `projected_roster_lines` to derive from it (single daily sweep).
+- Tests + live validation + commit per the standing cadence.
+- **Done + committed.** Optimizer tests (matching/capacity/punting) added → suite 17 passing. Live-validated on `wserh14rmbbpqtcg` period 4: 7 days, candidates/day = [10,8,12,3,12,9,8]; busy days correctly capped to the 9 slots (started/day = [9,8,9,3,9,9,8], all feasible); optimized line stayed competitive (8–1–0 vs a 0.88× stand-in target) while trimming volume to protect FG%/TO.
+- Next: build step #4 — `actual_team_line` + `matchup_opponent`, then wire `compute_delta` end-to-end (`mine_opt`/`their_opt` via one-round best-response) and validate Δ across the 24 real periods. Open follow-up: confirm the exact 9-slot multiplicities from league settings (currently a documented best guess in `DEFAULT_NBA_SLOTS`).

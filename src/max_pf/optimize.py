@@ -1,32 +1,174 @@
-"""Daily lineup optimizer (Objective A) -- build step after the scaffold.
+"""Daily lineup optimizer (Objective A best-response).
 
-Given a team's candidate pool per day, position slots, and games-played caps,
-choose the active lineup over a matchup period that maximizes category wins
-against a fixed target line (best-response). This is the engine behind
-``mine_opt`` / ``their_opt`` in :mod:`max_pf.metric`.
+Given a team's per-day candidate pool over a matchup period, choose which players
+to start each day -- subject to the daily active-slot capacity and position
+eligibility -- so the aggregated period line wins the most categories against a
+fixed opponent target. This is the engine behind ``mine_opt`` / ``their_opt`` in
+:mod:`max_pf.metric`.
 
-Design notes (not yet implemented):
-- Objective is pluggable; A maximizes catwins vs a fixed opponent target.
-- Constraints: per-position daily slot limits and per-period games-played caps
-  (from the platform's position-count data). A player only contributes on days
-  they actually have a game (the game-log join handles injuries/DNPs).
-- FG%/FT% are non-additive, so the objective is evaluated on aggregated
-  makes/attempts (see :mod:`max_pf.models`), not summed percentages -- meaning
-  greedy per-day selection is not exact; expect an ILP / search formulation.
+Why this isn't a greedy per-day pick:
+- FG%/FT% are ratios, so adding a high-volume inefficient game can *lower* a
+  category you were winning; turnovers are lower-is-better. The optimum may bench
+  a player who has a game, or punt a category entirely.
+- The objective (count of categories won) is over the period aggregate, coupling
+  days together.
+
+Approach (v1): greedy value construction per day to get a strong feasible start,
+then global local search (swap / add / drop a player-game) accepting moves that
+improve ``(points_for, category-margin)``. Slot feasibility is enforced by a
+bipartite matcher. This league has no games-played caps; a cap budget is a clean
+future extension (the construction/search would carry a remaining-games state).
 """
 from __future__ import annotations
 
-from .models import PlayerLine, RosterDay
+from dataclasses import dataclass, field
+
+from .categories import CATEGORIES
+from .metric import CategoryResult, catwins
+from .models import PlayerLine, aggregate
+
+
+@dataclass(frozen=True)
+class Slot:
+    """One active lineup slot.
+
+    ``eligible`` is the set of player position short-names this slot accepts; an
+    empty set means a flex slot that accepts anyone.
+    """
+
+    name: str
+    eligible: frozenset[str] = frozenset()
+
+    def accepts(self, positions: tuple[str, ...]) -> bool:
+        return not self.eligible or bool(self.eligible.intersection(positions))
+
+
+@dataclass(frozen=True)
+class Candidate:
+    player_id: str
+    line: PlayerLine
+    positions: tuple[str, ...]
+
+
+@dataclass
+class OptimizerResult:
+    line: PlayerLine                      # aggregated period line of started games
+    started: list[list[str]] = field(default_factory=list)  # per-day started player ids
+    result: CategoryResult | None = None  # catwins(line, target)
+
+
+def can_assign(positions_list: list[tuple[str, ...]], slots: list[Slot]) -> bool:
+    """True if every player (by eligible positions) can take a distinct slot."""
+    if len(positions_list) > len(slots):
+        return False
+    slot_to_player: list[int] = [-1] * len(slots)
+
+    def augment(p: int, seen: list[bool]) -> bool:
+        for si, slot in enumerate(slots):
+            if not seen[si] and slot.accepts(positions_list[p]):
+                seen[si] = True
+                if slot_to_player[si] == -1 or augment(slot_to_player[si], seen):
+                    slot_to_player[si] = p
+                    return True
+        return False
+
+    for p in range(len(positions_list)):
+        if not augment(p, [False] * len(slots)):
+            return False
+    return True
+
+
+def _value(line: PlayerLine) -> float:
+    """Rough production proxy for the construction phase (search refines it)."""
+    return (
+        line.pts + line.reb + line.ast + 2 * line.stl + 2 * line.blk + line.tpm - line.to
+    )
+
+
+def _construct_day(candidates: list[Candidate], slots: list[Slot]) -> list[Candidate]:
+    """Greedily pick the highest-value slot-feasible subset for one day."""
+    chosen: list[Candidate] = []
+    for cand in sorted(candidates, key=lambda c: _value(c.line), reverse=True):
+        if can_assign([c.positions for c in chosen] + [cand.positions], slots):
+            chosen.append(cand)
+    return chosen
+
+
+def _score(line: PlayerLine, target: PlayerLine) -> tuple[float, float]:
+    """Objective: maximize category points, then total normalized margin.
+
+    The margin term gives the local search a gradient toward flipping near-miss
+    categories even when the category-win count is unchanged.
+    """
+    res = catwins(line, target)
+    mine, theirs = line.category_values(), target.category_values()
+    margin = 0.0
+    for cat in CATEGORIES:
+        diff = mine[cat.key] - theirs[cat.key]
+        if cat.lower_is_better:
+            diff = -diff
+        margin += diff / (abs(theirs[cat.key]) or 1.0)
+    return res.points_for, margin
+
+
+def _aggregate_started(started: list[list[Candidate]]) -> PlayerLine:
+    return aggregate([c.line for day in started for c in day])
 
 
 def best_response(
-    roster_days: list[RosterDay],
+    daily_candidates: list[list[Candidate]],
+    slots: list[Slot],
     target: PlayerLine,
-    slot_limits: dict[str, int],
-    games_played_caps: dict[str, int],
-) -> PlayerLine:
-    """Return the optimized period line that best beats ``target``.
+    max_passes: int = 50,
+) -> OptimizerResult:
+    """Return the lineup over the period that best beats ``target``.
 
-    Not yet implemented -- see module docstring for the intended formulation.
+    Args:
+        daily_candidates: per-day lists of players who have a game that day.
+        slots: active lineup slots (capacity = ``len(slots)`` per day).
+        target: opponent line to maximize category wins against.
+        max_passes: local-search iteration cap.
     """
-    raise NotImplementedError("daily lineup optimizer is the next build step")
+    started = [_construct_day(day, slots) for day in daily_candidates]
+    best = _score(_aggregate_started(started), target)
+
+    for _ in range(max_passes):
+        best_move = None  # (day_index, new_day_selection, score)
+        for d, day_all in enumerate(daily_candidates):
+            current = started[d]
+            current_ids = {c.player_id for c in current}
+            benched = [c for c in day_all if c.player_id not in current_ids]
+
+            neighbors: list[list[Candidate]] = []
+            # Drop one started player (punt / efficiency).
+            for s in current:
+                neighbors.append([c for c in current if c.player_id != s.player_id])
+            # Add one benched player (if a slot is free and feasible).
+            for b in benched:
+                if can_assign([c.positions for c in current] + [b.positions], slots):
+                    neighbors.append(current + [b])
+            # Swap a started player for a benched one.
+            for s in current:
+                kept = [c for c in current if c.player_id != s.player_id]
+                for b in benched:
+                    if can_assign([c.positions for c in kept] + [b.positions], slots):
+                        neighbors.append(kept + [b])
+
+            for cand_day in neighbors:
+                trial = started[:d] + [cand_day] + started[d + 1:]
+                score = _score(_aggregate_started(trial), target)
+                if score > best and (best_move is None or score > best_move[2]):
+                    best_move = (d, cand_day, score)
+
+        if best_move is None:
+            break
+        d, cand_day, score = best_move
+        started[d] = cand_day
+        best = score
+
+    line = _aggregate_started(started)
+    return OptimizerResult(
+        line=line,
+        started=[[c.player_id for c in day] for day in started],
+        result=catwins(line, target),
+    )
