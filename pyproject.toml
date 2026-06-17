@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "max-pf"
+version = "0.0.1"
+description = "Methodology + tooling to compute the 'max points for' metric for 9-cat fantasy basketball leagues."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "Rohan V" }]
+keywords = ["fantasy", "basketball", "9-cat", "fantrax", "optimization"]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+# The Fantrax platform adapter wraps the stable fork of FantraxAPI.
+fantrax = ["fantraxapi @ git+https://github.com/riders994/FantraxAPI@stable"]
+dev = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/max_pf"]
+
+[tool.hatch.metadata]
+# Allow the direct git reference in the `fantrax` extra.
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
