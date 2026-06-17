@@ -11,6 +11,8 @@ license = { file = "LICENSE" }
 requires-python = ">=3.11"
 authors = [{ name = "Rohan V" }]
 keywords = ["fantasy", "basketball", "9-cat", "fantrax", "optimization"]
+# Convention: dependency version constraints use `>=` (lower bound only), never
+# `==`/`~=`/upper caps, for the broadest install compatibility.
 dependencies = [
     "requests>=2.28",
 ]

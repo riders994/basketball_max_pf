@@ -285,3 +285,11 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - **Verified our adapter is fully compatible:** the surface we use is unchanged — `H2HRotisserie2.scoring_grid/.home/.away`, `api.get_team_roster_info`, `scoring_period_results(playoffs=False)`, `League`/`positions`/`scoring_dates`/`scoring_periods`. Our raw-table parsing keys off `scipId`/header `key`, so the new salary/age columns don't shift anything. We don't use `get_transaction_history`/`.transactions()`/`Roster`/`get_live_scoring_stats` at runtime.
 - **Only change needed:** removed the now-obsolete `transaction_date_column` workaround (dead code; upstream fixed transaction pagination + parsing). Suite still **35 passing**. `pyproject` pin is `@stable` so installs auto-get the update — no pin change.
 - Deferred (no-concurrency): live re-validation against the new fork once the hindsight run finishes; the in-flight hindsight artifact uses the prior fork (date mapping validated correct for this league, so unaffected in practice).
+
+## Prompt 24 — 2026-06-17
+
+> Adopt this convention for packaging: all indicated version numbers should be >= for greater compatibility
+
+*Response notes:*
+- Audited `pyproject.toml`: already compliant — `requires-python>=3.11`, `requests>=2.28`, `beautifulsoup4>=4.12`, `pytest>=7` all use `>=`; no `==`/`~=`/upper caps anywhere. Non-version specs are exempt (the `fantrax` extra is a git `@stable` tag pin; `hatchling` build req is intentionally unversioned).
+- Codified the convention as a comment in `pyproject.toml` and saved it to memory ([[packaging-version-convention]]) so future dependency additions follow it. No functional change.
