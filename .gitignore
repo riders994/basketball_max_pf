@@ -17,6 +17,9 @@ venv/
 .coverage
 htmlcov/
 
+# Cached external data (basketball-reference HTML, etc.)
+.cache/
+
 # Secrets / platform credentials
 *.cookie
 fantraxloggedin.cookie

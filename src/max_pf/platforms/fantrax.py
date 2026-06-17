@@ -243,6 +243,18 @@ class FantraxPlatform(LeaguePlatform):
     def team_name(self, team_id: str) -> str:
         return self._league.team(team_id).name
 
+    def all_players(self) -> dict[str, str]:
+        """Map scorerId -> display name across all current rosters (for id mapping)."""
+        out: dict[str, str] = {}
+        for team_id in self.team_ids():
+            raw = self._api.get_team_roster_info(self._league, team_id)
+            for table in raw[0].get("tables", []):
+                for row in table.get("rows", []):
+                    scorer = row.get("scorer")
+                    if scorer:
+                        out[scorer["scorerId"]] = scorer["name"]
+        return out
+
     def matchup_periods(self) -> list[int]:
         return sorted(self._league.scoring_periods)
 

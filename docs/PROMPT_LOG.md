@@ -242,3 +242,14 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Stage 1 done + committed. Added `sources.py` (`StatSource` ABC: `expected_candidates`, and `hindsight_candidates` defaulting to a loud NotImplementedError). `FantraxPlatform` now holds an injectable `self.stat_source` (default `FantraxStatSource`), and `period_candidates(team, period, methodology="expected"|"hindsight")` routes through it (cache keyed by methodology). Renamed the raw Fantrax logic to `expected_period_candidates`.
 - Tests for the seam → **29 passing**. Live no-regression: period 6 reproduces actual 4-5 / M1 6-3 / M2 4-5 / Δ 2.0; Fantrax hindsight path raises clearly.
 - Next: Stage 2 — `BoxScoreStatSource` (bref): per-date box scores → (player, date) 9-cat w/ makes/attempts + schedule, name→`scorerId` mapping with a coverage report.
+
+## Prompt 20 — 2026-06-17
+
+> Proceed with Stage 2, cache under .cache/bref/
+
+*Response notes:*
+- Inspected live bref HTML: daily index → `/boxscores/<YYYYMMDD0TTT>.html` game pages; each has uncommented `box-<TEAM>-game-basic` tables; player rows carry `data-append-csv` (bref id) + `data-stat` cells `fg/fga/fg3/ft/fta/trb/ast/stl/blk/tov/pts` → **real makes/attempts**.
+- Built `box_bref.py` (optional extra `boxscores` = beautifulsoup4+requests): `BRefClient` (disk-cached under `.cache/bref/`, ~3.5s rate limit), pure parsers (`parse_day_index`, `parse_game_lines`, `normalize_name` w/ accent+suffix stripping), `day_lines`/`day_teams`, and `build_id_map` (Fantrax scorerId → bref id by normalized name, with `MappingResult` coverage/unmatched/ambiguous + a small extensible `ALIASES` map). Added `FantraxPlatform.all_players()`. `.cache/` git-ignored.
+- Tests (pure parsers, normalization, mapping incl. alias) → **34 passing**.
+- Live validation (4 dates of period 4): 372 bref players parsed, 316 Fantrax rostered. Parser exact (spot-check Kon Knueppel 16/6/1, 5/13 FG = .385). Mapping: 232 matched, **0 ambiguous**, 84 unmatched — classified: **61 simply didn't play in the 4-date window**, and 22/23 "surname-present" cases are coincidental collisions with *different* players (e.g. injured Dejounte Murray vs Kris/Jamal Murray). Only genuine name-form gaps were nicknames (Bub↔Carlton Carrington, Nic↔Nicolas Claxton) → handled via `ALIASES`. Matching precision is effectively ~100% for players present; raw 73% coverage is a date-window artifact.
+- Next: Stage 3 — `BoxScoreStatSource` wiring (realized daily candidates for A-hindsight; exact season-to-date projections + schedule for A-expected-on-box-scores), then the full run.

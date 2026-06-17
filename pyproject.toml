@@ -18,6 +18,8 @@ dependencies = [
 [project.optional-dependencies]
 # The Fantrax platform adapter wraps the stable fork of FantraxAPI.
 fantrax = ["fantraxapi @ git+https://github.com/riders994/FantraxAPI@stable"]
+# External box-score source (basketball-reference) for exact stats / A-hindsight.
+boxscores = ["beautifulsoup4>=4.12", "requests>=2.28"]
 dev = ["pytest>=7"]
 
 [tool.hatch.build.targets.wheel]
