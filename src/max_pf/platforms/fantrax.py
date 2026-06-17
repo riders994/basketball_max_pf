@@ -227,9 +227,19 @@ class FantraxPlatform(LeaguePlatform):
         self._api = api
         self._league = League(league_id, session=session) if session else League(league_id)
         self._period_results_cache: dict | None = None
+        # Finished-season data is immutable, so memoize the expensive fetches.
+        # Each (team, period) candidate set is otherwise computed twice (once as
+        # a team, once as its opponent's opponent).
+        self._candidates_cache: dict[tuple[str, int], list[list[Candidate]]] = {}
 
     def team_ids(self) -> list[str]:
         return [t.id for t in self._league.teams]
+
+    def team_name(self, team_id: str) -> str:
+        return self._league.team(team_id).name
+
+    def matchup_periods(self) -> list[int]:
+        return sorted(self._league.scoring_periods)
 
     def scoring_dates(self) -> dict[int, date]:
         return dict(self._league.scoring_dates)
@@ -272,8 +282,16 @@ class FantraxPlatform(LeaguePlatform):
         season-to-date per-game line (as of the period start) and eligible
         positions. Summing a player's candidate days reproduces their projected
         period total, so the optimizer's "start everyone" equals the projection.
-        Players added mid-period are not projected (v1).
+        Players added mid-period are not projected (v1). Memoized per (team, period).
         """
+        cached = self._candidates_cache.get((team_id, period))
+        if cached is not None:
+            return cached
+        result = self._compute_period_candidates(team_id, period)
+        self._candidates_cache[(team_id, period)] = result
+        return result
+
+    def _compute_period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
         days = self.matchup_period_days(period)
         if not days:
             return []

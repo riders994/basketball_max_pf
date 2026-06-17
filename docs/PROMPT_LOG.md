@@ -202,3 +202,13 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Made it general instead of hardcoded: added `slot_eligibility(short_name)` (parses single positions, combo letters G→PG/SG, F→SF/PF, slash combos like G/C, flex→any) and `FantraxPlatform.active_slots()` which derives slots+eligibility from the league for any roster config. Hardened eligibility to be inclusive (G slot accepts PG/SG, not just players tagged "G"). `DEFAULT_NBA_SLOTS` kept as a convenience/fallback built via `slot_eligibility`.
 - Tests for the eligibility parser + default layout → **suite 22 passing**. Live: `active_slots()` returns the confirmed 9-slot config; period 6 with derived slots reproduces the step-#4 result (actual 4-5, M1 6-3, M2 4-5, Δ 2.0) — no regression.
 - Recommended next: full-season report (all 24 periods × all teams) so the metric is visible league-wide.
+
+## Prompt 16 — 2026-06-17
+
+> I want a printed table + written file at same commit cadence
+
+*Response notes:*
+- Built `report.py` (TeamSeason aggregation + text/CSV/Markdown renderers) and a `python -m max_pf <league_id> [--periods] [--out]` CLI that prints a table and writes `<out>.csv` + `<out>.md`. Added per-`(team, period)` memoization of `period_candidates` (each is otherwise computed twice — once as a team, once as its opponent), plus `team_name` / `matchup_periods` helpers. Tests → **27 passing**.
+- Live subset run (periods 1–3, all 16 teams) printed the table and wrote both files. ✅ feature works.
+- **KEY FINDING:** several teams showed **M1 < Actual** (Eff% > 100%). Not a bug — it's the ex-ante/ex-post gap: `mine_opt` uses **A-expected projections** while `Actual` is **realized**, so a team that ran hot beats its projection-optimum. The "Left/Eff%" columns carried an A-hindsight meaning that's invalid for A-expected. Relabeled: dropped Left/Eff%, added **Luck = Actual − M1** (projection variance), and documented that a true lineup-management efficiency (realized-optimal ≥ realized-actual) needs the **A-hindsight** variant.
+- Recommend building **A-hindsight** next (realized per-day lines via `player_day_lines`) — it's the variant that makes the "max points for" ceiling/efficiency interpretation valid. Full 24-period × 16-team run is available via the CLI (slow, ~a few min); offered to run it in the background and commit the artifact.
