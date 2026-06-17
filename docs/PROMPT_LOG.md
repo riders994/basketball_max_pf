@@ -302,3 +302,17 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - **Luck (Actual − M1):** magnitude shrinks under hindsight (band −6.5…−60 vs expected −9.5…−66; e.g. Testicular −56 → −29, Nico's −66 → −60, ZuPac −9.5 → −8). This is the core payoff of A-hindsight: with projection variance removed, the Actual−M1 gap is **genuine lineup mismanagement (points left on the table)**, not forecast noise. A-expected's "Luck" conflated the two.
 - **Δ (opponent-mismanagement dividend):** the expected spread (7–73) **compresses to a tight, credible 11–35** under hindsight. Projection-driven extremes regress: the dbyun89 expected outlier (Δ=73, driven by an implausibly low expected M2=38) corrects to Δ=35 (M2=71), confirming it was a projection artifact; other inflated dividends compress similarly (Good Night Luka 52.5→30.5, Ant-ticpating 44→15, Kevin's 43→27.5). Conversely the suspiciously-low Δ for elite teams rises (ZuPac 9→16.5, johqui 7→27) as their opponents' realized-optimal M2 lands below the projection. Net: A-hindsight is the trustworthy read for both the efficiency ceiling (Luck) and the dividend (Δ).
 - **Still deferred (no-concurrency, needs a live session):** re-validate the adapter against the updated `@stable` fork end-to-end (the deferred item from Prompt 23); the committed hindsight artifact was generated on the prior fork, whose date mapping was validated correct for this league, so the numbers are unaffected.
+
+## Prompt 25 — 2026-06-17
+
+> Make sure all findings are properly documented. Then finish up the fork re-validation. You shouldn't need credentials beyond the ID as the league is public.
+
+*Response notes:*
+- **Documentation:** the findings previously lived only in this chronological log. Wrote a proper `README.md` consolidating the metric (M1/M2/Δ/Luck, draw=0.5), the two methodologies (A-expected vs A-hindsight), data sources (Fantrax + basketball-reference behind the `StatSource` seam), install/CLI/programmatic usage, the full-season findings + comparison, and the roadmap. The README now links the report artifacts and the prompt log.
+- **Fork re-validation — DONE, clean.** Fresh venv, `pip install -e ".[fantrax,boxscores,dev]"` against the updated `@stable` fork installed without error; **35/35 tests pass**. Public league `wserh14rmbbpqtcg` reads through the fork with the **league id only** (no credentials), as expected: 16 teams, 24 periods, 9-slot config matches `DEFAULT_NBA_SLOTS`.
+- **End-to-end results are bit-identical to the pre-update fork** (live, team `1whyncpkmbbpqtde` "Ant-ticpating wins"):
+  - A-expected period 6: actual 4-5, M1 6-3, M2 4-5, **Δ 2.0** — matches Prompt 15 exactly.
+  - A-expected periods 3–6: per-period Δ = 1.0/0.0/1.0/2.0, **sum 4.0** — matches Prompt 14 (incl. P5 actual 1-8 vs M1 4-5).
+  - A-hindsight period 4: actual 1-8, M1 2-7 (**≥ actual ✓**, 1.0 left on table), M2 2-7, Δ 0.0 — matches Prompt 21.
+  - → confirms the additive `@stable` changes (salary cap, `ScoringCategory`, `category_winners`, transaction pagination/parsing fixes) shifted nothing in our pipeline; the committed report artifacts stand. Note: raw `urllib` to fantrax.com 403s (UA bot-block), but the fork's `requests` session reads fine.
+- (Sandbox note: stats.nba.com remains blocked here; basketball-reference reachable — A-hindsight ran against bref as designed.)
