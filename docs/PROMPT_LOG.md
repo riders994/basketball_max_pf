@@ -266,3 +266,12 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Tests (BoxScoreStatSource w/ fake platform+client, methodology threading) → **35 passing**. Live (period 4, team 1whync…): actual 1-8; A-hindsight M1 2-7 ≥ actual ✓ (1.0 left on table); A-expected and A-hindsight agreed here. The realized-optimal ≥ actual invariant (which A-expected couldn't guarantee) now holds.
 - Caveat: actuals come from the Fantrax grid while mine_opt uses bref lines, so M1 ≥ actual can be marginally noisy from source mismatch; held cleanly here.
 - Next (user-approved): the full run.
+
+## Prompt 22 — 2026-06-17
+
+> Wait until the first run is done, then do the second run. Let's limit concurrent calls to avoid problems
+
+*Response notes:*
+- Ran the **full-season A-expected report** (all 16 teams × 24 periods) as a tracked background task; committed `season_report.csv`/`.md`. Over the full season **M1 ≥ Actual for every team** (Luck all negative, −9.5…−66) — the expected-ceiling-vs-actual gap is sensible once weekly variance averages out, and accumulated lineup inefficiency shows. Δ (opponent-mismanagement dividend) ranges 7–73 (dbyun89 an outlier at 73, M2 only 38). Top of table: ZuPacalypse Now (Actual 150.5, M1 160).
+- Per the user, runs are **sequential, not concurrent**; the `BRefClient` is single-request at ~3.5s spacing with on-disk caching (resumable), so the A-hindsight crawl won't overlap the Fantrax run and stays polite.
+- Launching the full **A-hindsight** season run next → `season_report_hindsight.*` (kept separate so both methodologies can be compared).
