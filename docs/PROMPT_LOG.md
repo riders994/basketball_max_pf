@@ -192,3 +192,13 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Tests: grid decode + engine wiring with a fake platform (bye → None). **Suite: 20 passing.**
 - Live-validated team `1whync…` over periods 3–6: every period **M1 ≥ actual** and **M1 ≥ M2** (so Δ ≥ 0), e.g. period 5 actual 1–8 vs M1 4–5; sum Δ = 4.0 (avg 1.0 cat/week). Pipeline behaves as designed.
 - **Objective A is now end-to-end functional.** Remaining/optional: confirm slot multiplicities; full 24-period + all-teams season run; then the other methodologies (A-expected vs A-hindsight comparison, Objective C, etc.).
+
+## Prompt 15 — 2026-06-17
+
+> Take #1
+
+*Response notes:*
+- Confirmed the active-slot config from the roster's Active-status rows (statusId "1"): **PG,SG,G,SF,PF,F,C ×1 + Flx ×2 = 9** — exactly matched the `DEFAULT_NBA_SLOTS` guess, so step-#4 numbers stand. (League settings JSON had no explicit roster spec; the status/posId rows are the source of truth.)
+- Made it general instead of hardcoded: added `slot_eligibility(short_name)` (parses single positions, combo letters G→PG/SG, F→SF/PF, slash combos like G/C, flex→any) and `FantraxPlatform.active_slots()` which derives slots+eligibility from the league for any roster config. Hardened eligibility to be inclusive (G slot accepts PG/SG, not just players tagged "G"). `DEFAULT_NBA_SLOTS` kept as a convenience/fallback built via `slot_eligibility`.
+- Tests for the eligibility parser + default layout → **suite 22 passing**. Live: `active_slots()` returns the confirmed 9-slot config; period 6 with derived slots reproduces the step-#4 result (actual 4-5, M1 6-3, M2 4-5, Δ 2.0) — no regression.
+- Recommended next: full-season report (all 24 periods × all teams) so the metric is visible league-wide.

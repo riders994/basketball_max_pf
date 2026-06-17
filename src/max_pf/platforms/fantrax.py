@@ -17,14 +17,36 @@ from ..models import PlayerDay, PlayerLine, RosterDay
 from ..optimize import Candidate, Slot
 from .base import LeaguePlatform
 
-# Best-guess 9 active-slot configuration for this NBA league (eligibility uses
-# Fantrax's own position tagging: a slot accepts a player tagged with its name;
-# Flex accepts anyone). Multiplicities should be confirmed from league settings.
+# How a slot's short name expands to the player position tags it accepts.
+# Combo letters cover their base positions (G = guards, F = forwards); flex
+# slots accept anyone (empty eligible set).
+_POS_EXPAND: dict[str, set[str]] = {
+    "PG": {"PG"}, "SG": {"SG"}, "SF": {"SF"}, "PF": {"PF"}, "C": {"C"},
+    "G": {"PG", "SG", "G"}, "F": {"SF", "PF", "F"},
+}
+
+
+def slot_eligibility(short_name: str) -> frozenset[str]:
+    """Player position tags a slot accepts, parsed from its short name.
+
+    Handles single positions ("C"), combo letters ("G", "F"), slash combos
+    ("G/C", "SG/SF"), and flex/util (any player -> empty set).
+    """
+    name = short_name.strip()
+    if name.lower().startswith(("flx", "flex", "util")):
+        return frozenset()
+    eligible: set[str] = set()
+    for token in name.split("/"):
+        token = token.strip()
+        eligible |= _POS_EXPAND.get(token, {token})
+    return frozenset(eligible)
+
+
+# Confirmed active-slot layout for league wserh14rmbbpqtcg (PG,SG,G,SF,PF,F,C +
+# 2 Flex = 9). General code should prefer FantraxPlatform.active_slots(), which
+# derives this from the league; this constant is a convenience/fallback.
 DEFAULT_NBA_SLOTS: list[Slot] = [
-    Slot("PG", frozenset({"PG"})), Slot("SG", frozenset({"SG"})),
-    Slot("G", frozenset({"G"})), Slot("SF", frozenset({"SF"})),
-    Slot("PF", frozenset({"PF"})), Slot("F", frozenset({"F"})),
-    Slot("C", frozenset({"C"})), Slot("Flx"), Slot("Flx"),
+    Slot(n, slot_eligibility(n)) for n in ("PG", "SG", "G", "SF", "PF", "F", "C", "Flx", "Flx")
 ]
 
 # Per-player *daily total* stat ids (getLiveScoringStats -> object2).
@@ -211,6 +233,21 @@ class FantraxPlatform(LeaguePlatform):
 
     def scoring_dates(self) -> dict[int, date]:
         return dict(self._league.scoring_dates)
+
+    def active_slots(self) -> list[Slot]:
+        """Derive the league's active lineup slots from a roster (status=Active).
+
+        Slot multiplicities and eligibility come straight from the league, so
+        this works for any roster configuration, not just the default NBA one.
+        """
+        raw = self._api.get_team_roster_info(self._league, self.team_ids()[0])
+        slots: list[Slot] = []
+        for table in raw[0].get("tables", []):
+            for row in table.get("rows", []):
+                if row.get("statusId") == "1" and "posId" in row:  # 1 = Active
+                    short = self._league.positions[row["posId"]].short_name
+                    slots.append(Slot(short, slot_eligibility(short)))
+        return slots
 
     def _roster_stats_tables(self, team_id: str, daily_period: int) -> list[dict]:
         raw = self._api.get_team_roster_info(self._league, team_id, period_number=daily_period)

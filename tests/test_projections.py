@@ -1,10 +1,27 @@
 from max_pf.platforms.fantrax import (
     DAILY_STAT_SCIP,
+    DEFAULT_NBA_SLOTS,
     PERGAME_STAT_SCIP,
     decode_roster_stats,
     players_with_game,
+    slot_eligibility,
 )
 from max_pf.projections import project_period_line
+
+
+def test_slot_eligibility_parsing():
+    assert slot_eligibility("C") == frozenset({"C"})
+    assert slot_eligibility("G") == frozenset({"PG", "SG", "G"})
+    assert slot_eligibility("F") == frozenset({"SF", "PF", "F"})
+    assert slot_eligibility("Flx") == frozenset()  # flex accepts anyone
+    assert slot_eligibility("G/C") == frozenset({"PG", "SG", "G", "C"})
+    assert slot_eligibility("SG/SF") == frozenset({"SG", "SF"})
+
+
+def test_default_nba_slots_layout():
+    assert len(DEFAULT_NBA_SLOTS) == 9
+    assert sum(1 for s in DEFAULT_NBA_SLOTS if not s.eligible) == 2  # two flex
+    assert [s.name for s in DEFAULT_NBA_SLOTS].count("C") == 1
 
 
 def _header_cell(scip: int, name: str) -> dict:
