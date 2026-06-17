@@ -215,10 +215,13 @@ class FantraxPlatform(LeaguePlatform):
         self._league = League(league_id, session=session) if session else League(league_id)
         self._period_results_cache: dict | None = None
         # Player performance comes from pluggable StatSources, routed by
-        # methodology: A-expected from stat_source (Fantrax projections +
-        # estimator by default), A-hindsight from an optional box-score source
-        # attached via use_boxscores(). The optimizer/engine/report are unchanged.
+        # methodology: A-expected from expected_source (Fantrax projections +
+        # estimator by default), A-hindsight from an optional box-score source.
+        # use_boxscores() attaches one box-score source and points BOTH routes at
+        # it (exact rates for expected, realized lines for hindsight). The
+        # optimizer/engine/report are unchanged.
         self.stat_source: StatSource = stat_source or FantraxStatSource(self)
+        self.expected_source: StatSource = self.stat_source
         self.hindsight_source: StatSource | None = None
         # Finished-season data is immutable, so memoize the expensive fetches.
         # Each (team, period) candidate set is otherwise computed twice (once as
@@ -314,15 +317,21 @@ class FantraxPlatform(LeaguePlatform):
                 )
             result = self.hindsight_source.hindsight_candidates(team_id, period)
         else:
-            result = self.stat_source.expected_candidates(team_id, period)
+            result = self.expected_source.expected_candidates(team_id, period)
         self._candidates_cache[key] = result
         return result
 
     def use_boxscores(self, client) -> None:
-        """Attach a basketball-reference box-score source for A-hindsight."""
+        """Attach a basketball-reference box-score source for both methodologies.
+
+        Routes A-hindsight (realized per-day lines) AND A-expected (exact
+        season-to-date rates, replacing the FG/FT estimator) through it.
+        """
         from ..box_bref import BoxScoreStatSource
 
-        self.hindsight_source = BoxScoreStatSource(self, client)
+        box = BoxScoreStatSource(self, client)
+        self.hindsight_source = box
+        self.expected_source = box
 
     def expected_period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
         """Fantrax-derived A-expected per-day pools (used by FantraxStatSource).

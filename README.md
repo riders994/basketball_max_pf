@@ -41,10 +41,12 @@ The optimizer needs a target statline for each player. Where that comes from is
 the **ex-ante vs ex-post** fork, and the package implements both:
 
 - **A-expected** (`--methodology expected`) — season-to-date *per-game rates*
-  scaled by games scheduled in the period. No clairvoyance; the ceiling is a
-  projection. Buildable from Fantrax data alone (with a position-based FG/FT
-  attempt estimator where makes/attempts aren't exposed). Its `Luck` mixes
-  forecast variance with real mismanagement.
+  placed on the days each player's team plays in the period. No clairvoyance;
+  the ceiling is a projection. Rates come from exact basketball-reference
+  box scores (real makes/attempts, no estimator); the Fantrax season-to-date
+  view + position-based FG/FT attempt estimator is the no-extra-dependency
+  fallback when box scores aren't attached. Its `Luck` mixes forecast variance
+  with real mismanagement.
 - **A-hindsight** (`--methodology hindsight`) — *realized* per-day box scores
   from basketball-reference, joined to the full historical roster. This is the
   true "best lineup you could have set" ceiling: **M1 ≥ Actual always**, so
@@ -126,7 +128,11 @@ projection useful before results are in.
 
 - Live re-validation against the updated `@stable` fork — **done** (results
   bit-identical to the pre-update fork; see the prompt log).
-- Exact A-expected on box scores (replace the FG/FT attempt estimator entirely).
+- Exact A-expected on box scores (estimator replaced as the metric's data
+  source) — **done**; reproduces the estimator's category-win metric while using
+  real makes/attempts and the real schedule. (The committed `season_report.*`
+  artifact was generated on the earlier estimator path; regenerating it on box
+  scores is the next full run.)
 - Objective B (z-score / punt-aware weighting) and Objective C.
 - Nash "mutual ceiling" (two-player equilibrium) as an advanced methodology.
 

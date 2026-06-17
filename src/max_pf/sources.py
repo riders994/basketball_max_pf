@@ -7,9 +7,11 @@ results) always comes from the platform; a StatSource only supplies player
 
 - ``FantraxStatSource`` (platforms.fantrax): season-to-date per-game rates + the
   FG/FT attempts estimator. No extra dependency; supplies A-expected only
-  (Fantrax exposes daily lines for *started* players only).
-- ``BoxScoreStatSource`` (box_bref): exact realized per-day 9-cat lines with real
-  makes/attempts from basketball-reference; supplies A-hindsight.
+  (Fantrax exposes daily lines for *started* players only). The fallback source.
+- ``BoxScoreStatSource`` (box_bref): exact per-player 9-cat lines with real
+  makes/attempts from basketball-reference; supplies *both* A-hindsight (realized
+  per-day lines) and A-expected (exact season-to-date rates, no estimator). The
+  primary source — attaching it via ``platform.use_boxscores`` upgrades both.
 
 A source implements whichever methodologies it can; the platform routes each
 methodology to a source that supports it. Both methods default to a clear error

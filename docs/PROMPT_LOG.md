@@ -316,3 +316,16 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
   - A-hindsight period 4: actual 1-8, M1 2-7 (**≥ actual ✓**, 1.0 left on table), M2 2-7, Δ 0.0 — matches Prompt 21.
   - → confirms the additive `@stable` changes (salary cap, `ScoringCategory`, `category_winners`, transaction pagination/parsing fixes) shifted nothing in our pipeline; the committed report artifacts stand. Note: raw `urllib` to fantrax.com 403s (UA bot-block), but the fork's `requests` session reads fine.
 - (Sandbox note: stats.nba.com remains blocked here; basketball-reference reachable — A-hindsight ran against bref as designed.)
+
+## Prompt 26 — 2026-06-17
+
+> Right, let's finish #1 first to get on to the current data source.
+
+*Response notes:*
+- Built roadmap item #1: **exact A-expected on box scores**, replacing the FG/FT attempt estimator as the metric's data source.
+- `BoxScoreStatSource` now supplies **both** methodologies. New `expected_candidates`: accumulate each rostered player's realized bref lines from season start to the period's first day (Σmakes/Σattempts ÷ games → exact per-game rate, no estimator), then place that rate on each in-period day the player's NBA team plays (real schedule via `day_teams`, replacing the ~7-call Fantrax "Opponent" sweep). Added `projections.per_game_line` (inverse of `project_period_line`), a shared module-level `_match_membership` (unique-name match, used by both methods), and a per-date `_day_cache` memo on the source (parsed day lines reused across teams/periods/accumulation on top of the on-disk cache).
+- Routing: `FantraxPlatform` gained `expected_source` (defaults to the Fantrax estimator source); `use_boxscores(client)` now points **both** `expected_source` and `hindsight_source` at one `BoxScoreStatSource`. The CLI attaches box scores unconditionally, so both methodologies are box-score-backed by default; the Fantrax estimator remains the no-extra-dependency fallback (used when box scores aren't attached). Optimizer/engine/report unchanged.
+- Tests: added an `expected_candidates` unit test (season-to-date rate from two prior games, alias match, schedule gating, unplayed player dropped) → **36 passing**.
+- **Live validation** (team `1whyncpkmbbpqtde`, warm `.cache/bref/`): routing confirmed (`expected_source is hindsight_source` after `use_boxscores`). Exact vs estimator A-expected reproduce the **identical category-win metric** across early/mid/late periods — P4 M1 2-7 Δ0.0, P12 M1 8-1 Δ6.0, P20 M1 4-5 Δ2.0 (both paths). The exact candidate pool is leaner (P4 11 vs 18 players: only players with a prior game + a real team game that day) but still fills all 9 slots optimally, so M1/M2/Δ are unchanged — confirming the estimator was a sound approximation now superseded by exact data.
+- v1 simplification retained: players with no prior game (e.g. a not-yet-debuted rookie) aren't projected, same as mid-period adds.
+- **Pending (next full run):** regenerate `season_report.*` (A-expected) on the box-score path so the committed artifact matches the new default; the metric is expected to be ~unchanged given the per-period agreement above. Then on to roadmap #2 (Objective B / z-score punt-aware weighting).

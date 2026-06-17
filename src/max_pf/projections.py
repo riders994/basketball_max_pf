@@ -30,3 +30,16 @@ def project_period_line(per_game: PlayerLine, games_in_period: int) -> PlayerLin
     return PlayerLine(
         **{f.name: getattr(per_game, f.name) * games_in_period for f in fields(PlayerLine)}
     )
+
+
+def per_game_line(total: PlayerLine, games: int) -> PlayerLine:
+    """Divide a season-to-date total line by games played to get a per-game line.
+
+    The inverse of :func:`project_period_line`. Dividing makes/attempts directly
+    keeps FG%/FT% exact (no averaging of percentages).
+    """
+    if games <= 0:
+        raise ValueError("games must be positive")
+    return PlayerLine(
+        **{f.name: getattr(total, f.name) / games for f in fields(PlayerLine)}
+    )

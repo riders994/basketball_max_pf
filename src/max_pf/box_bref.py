@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .models import PlayerLine
 from .optimize import Candidate
+from .projections import per_game_line
 from .sources import StatSource
 
 BASE = "https://www.basketball-reference.com"
@@ -188,18 +189,54 @@ class BRefClient:
         return {pb.team for pb in self.day_lines(on).values()}
 
 
+def _match_membership(
+    membership: dict[str, tuple[str, tuple[str, ...]]],
+    day_lines: dict[str, PlayerBox],
+) -> dict[str, PlayerBox]:
+    """Roster scorerId -> the bref box that uniquely matches it by normalized name.
+
+    Players with no match, or an ambiguous (>1 bref id) match, are dropped — the
+    same unique-match rule both methodologies rely on.
+    """
+    index: dict[str, set[str]] = {}
+    for pb in day_lines.values():
+        index.setdefault(normalize_name(pb.name), set()).add(pb.bref_id)
+    out: dict[str, PlayerBox] = {}
+    for scorer_id, (name, _positions) in membership.items():
+        norm = normalize_name(name)
+        ids = index.get(ALIASES.get(norm, norm))
+        if ids and len(ids) == 1:
+            out[scorer_id] = day_lines[next(iter(ids))]
+    return out
+
+
 class BoxScoreStatSource(StatSource):
-    """A-hindsight source: realized per-day lines from basketball-reference.
+    """Box-score source: exact per-player lines from basketball-reference.
 
     Combines Fantrax roster membership (who was rostered each day) with bref's
-    realized box scores (what they actually did), matched by normalized name.
-    Because lines are realized and cover the whole roster, the optimizer's result
-    is a true ceiling (>= the team's actual result).
+    real box scores (makes/attempts, no estimator), matched by normalized name.
+    Supplies both methodologies from one exact data source:
+
+    - **A-hindsight** — each in-period day's *realized* lines over the full
+      roster, so the optimizer's result is a true ceiling (>= actual).
+    - **A-expected** — *season-to-date* per-game rates (accumulated from realized
+      lines before the period) projected onto the days each player's NBA team
+      plays in the period. Exact FG/FT rates replace the Fantrax estimator.
     """
 
     def __init__(self, platform, client: BRefClient) -> None:
         self._platform = platform
         self._client = client
+        # Parsed day lines are reused across teams, periods, and the season-to-date
+        # accumulation, so memoize per date (on top of the client's on-disk cache).
+        self._day_cache: dict[date, dict[str, PlayerBox]] = {}
+
+    def _day_lines(self, on: date) -> dict[str, PlayerBox]:
+        cached = self._day_cache.get(on)
+        if cached is None:
+            cached = self._client.day_lines(on)
+            self._day_cache[on] = cached
+        return cached
 
     def hindsight_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
         days = self._platform.matchup_period_days(period)
@@ -208,22 +245,46 @@ class BoxScoreStatSource(StatSource):
         membership = self._platform.roster_membership(team_id, days[0])
         scoring_dates = self._platform.scoring_dates()
         return [
-            self._match_day(membership, self._client.day_lines(scoring_dates[dp]))
+            [
+                Candidate(sid, pb.line, membership[sid][1])
+                for sid, pb in _match_membership(membership, self._day_lines(scoring_dates[dp])).items()
+            ]
             for dp in days
         ]
 
-    @staticmethod
-    def _match_day(
-        membership: dict[str, tuple[str, tuple[str, ...]]],
-        day_lines: dict[str, PlayerBox],
-    ) -> list[Candidate]:
-        index: dict[str, set[str]] = {}
-        for pb in day_lines.values():
-            index.setdefault(normalize_name(pb.name), set()).add(pb.bref_id)
-        candidates: list[Candidate] = []
-        for scorer_id, (name, positions) in membership.items():
-            norm = normalize_name(name)
-            ids = index.get(ALIASES.get(norm, norm))
-            if ids and len(ids) == 1:  # unique match who played that day
-                candidates.append(Candidate(scorer_id, day_lines[next(iter(ids))].line, positions))
-        return candidates
+    def expected_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
+        """A-expected from exact box scores: season-to-date rates on scheduled days.
+
+        Rates are built from every game a rostered player played before the
+        period starts (Σmakes/Σattempts ÷ games), then placed on each in-period
+        day the player's NBA team plays. Players with no prior game (e.g. a
+        not-yet-debuted rookie) are not projected (v1, as with mid-period adds).
+        """
+        days = self._platform.matchup_period_days(period)
+        if not days:
+            return []
+        scoring_dates = self._platform.scoring_dates()
+        period_start = scoring_dates[days[0]]
+        membership = self._platform.roster_membership(team_id, days[0])
+
+        # Accumulate season-to-date totals from realized lines before the period.
+        totals: dict[str, PlayerLine] = {}
+        games: dict[str, int] = {}
+        team_of: dict[str, str] = {}
+        for d in sorted(dt for dt in scoring_dates.values() if dt < period_start):
+            for sid, pb in _match_membership(membership, self._day_lines(d)).items():
+                totals[sid] = totals.get(sid, PlayerLine()) + pb.line
+                games[sid] = games.get(sid, 0) + 1
+                team_of[sid] = pb.team  # last team seen (handles in-season trades)
+        rates = {sid: per_game_line(totals[sid], n) for sid, n in games.items()}
+
+        # Project each player onto the in-period days their NBA team plays.
+        per_day: list[list[Candidate]] = []
+        for dp in days:
+            teams_playing = {pb.team for pb in self._day_lines(scoring_dates[dp]).values()}
+            per_day.append([
+                Candidate(sid, rates[sid], membership[sid][1])
+                for sid in rates
+                if team_of.get(sid) in teams_playing
+            ])
+        return per_day
