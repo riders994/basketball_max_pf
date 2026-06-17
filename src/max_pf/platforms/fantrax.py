@@ -144,6 +144,37 @@ def players_with_game(stats_table: dict) -> set[str]:
     return out
 
 
+# Matchup scoring-grid labels (H2HRotisserie2 header shortNames) -> category keys.
+GRID_LABEL: dict[str, str] = {
+    "FG%": "fg_pct", "3PTM": "tpm", "FT%": "ft_pct", "PTS": "pts", "REB": "reb",
+    "AST": "ast", "ST": "stl", "BLK": "blk", "TO": "to",
+}
+
+
+def team_line_from_grid(grid: dict[str, dict[str, float]], team_id: str) -> PlayerLine:
+    """Build a team's realized line from a matchup ``scoring_grid``.
+
+    The grid only carries the FG%/FT% *percentages*, not makes/attempts, so we
+    store them with a unit denominator (fga/fta = 1) -- ``PlayerLine.fg_pct``
+    then returns the grid value exactly. This is a terminal team line used only
+    as a catwins operand/target; never aggregate it with other lines.
+    """
+    vals: dict[str, float] = {}
+    for label, key in GRID_LABEL.items():
+        if label in grid and team_id in grid[label]:
+            vals[key] = float(grid[label][team_id])
+    line = PlayerLine(
+        tpm=vals.get("tpm", 0.0), pts=vals.get("pts", 0.0), reb=vals.get("reb", 0.0),
+        ast=vals.get("ast", 0.0), stl=vals.get("stl", 0.0), blk=vals.get("blk", 0.0),
+        to=vals.get("to", 0.0),
+    )
+    if "fg_pct" in vals:
+        line.fgm, line.fga = vals["fg_pct"], 1.0
+    if "ft_pct" in vals:
+        line.ftm, line.fta = vals["ft_pct"], 1.0
+    return line
+
+
 def transaction_date_column(header_cells: list[dict]) -> int:
     """Locate the date column index from the transaction-table header.
 
@@ -173,6 +204,7 @@ class FantraxPlatform(LeaguePlatform):
 
         self._api = api
         self._league = League(league_id, session=session) if session else League(league_id)
+        self._period_results_cache: dict | None = None
 
     def team_ids(self) -> list[str]:
         return [t.id for t in self._league.teams]
@@ -235,13 +267,36 @@ class FantraxPlatform(LeaguePlatform):
                 totals[cand.player_id] = totals.get(cand.player_id, PlayerLine()) + cand.line
         return totals
 
-    # --- Remaining fetch methods: next sub-steps of the build -----------------
+    def _period_results(self) -> dict:
+        if self._period_results_cache is None:
+            self._period_results_cache = self._league.scoring_period_results(playoffs=False)
+        return self._period_results_cache
+
+    @staticmethod
+    def _side_id(side) -> str | None:
+        return side.id if hasattr(side, "id") else None
+
+    def _matchup_for(self, team_id: str, period: int):
+        spr = self._period_results().get(period)
+        if spr is None:
+            return None
+        for matchup in spr.matchups.values():
+            if team_id in (self._side_id(matchup.home), self._side_id(matchup.away)):
+                return matchup
+        return None
 
     def matchup_opponent(self, team_id: str, period: int) -> str | None:
-        raise NotImplementedError("wire up via scoring_period_results() matchup grid")
+        matchup = self._matchup_for(team_id, period)
+        if matchup is None:
+            return None
+        home, away = self._side_id(matchup.home), self._side_id(matchup.away)
+        return away if home == team_id else home
 
     def actual_team_line(self, team_id: str, period: int) -> PlayerLine:
-        raise NotImplementedError("map the matchup scoring_grid categories to PlayerLine")
+        matchup = self._matchup_for(team_id, period)
+        if matchup is None or not getattr(matchup, "scoring_grid", None):
+            raise ValueError(f"no scoring grid for team {team_id} in period {period}")
+        return team_line_from_grid(matchup.scoring_grid, team_id)
 
     def roster_day(self, team_id: str, period: int) -> RosterDay:
         raise NotImplementedError("build from league.team_roster(team_id, period)")

@@ -180,3 +180,15 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Tests + live validation + commit per the standing cadence.
 - **Done + committed.** Optimizer tests (matching/capacity/punting) added → suite 17 passing. Live-validated on `wserh14rmbbpqtcg` period 4: 7 days, candidates/day = [10,8,12,3,12,9,8]; busy days correctly capped to the 9 slots (started/day = [9,8,9,3,9,9,8], all feasible); optimized line stayed competitive (8–1–0 vs a 0.88× stand-in target) while trimming volume to protect FG%/TO.
 - Next: build step #4 — `actual_team_line` + `matchup_opponent`, then wire `compute_delta` end-to-end (`mine_opt`/`their_opt` via one-round best-response) and validate Δ across the 24 real periods. Open follow-up: confirm the exact 9-slot multiplicities from league settings (currently a documented best guess in `DEFAULT_NBA_SLOTS`).
+
+## Prompt 14 — 2026-06-17
+
+> Yep, go ahead
+
+*Response notes:*
+- Built step #4 (Δ end-to-end), committed.
+- Fantrax adapter: `matchup_opponent` + `actual_team_line` from the matchup `scoring_grid` (cached `scoring_period_results`). `team_line_from_grid()` maps grid labels → category keys; FG%/FT% stored with a **unit denominator** (fga/fta=1) so `PlayerLine.fg_pct` returns the grid % exactly (terminal line, never aggregated).
+- New `engine.py` orchestration (kept out of `metric`/`optimize` to avoid the catwins import cycle): `period_delta()` runs the one-round best-response (`mine_opt` vs `opp_actual`, `their_opt` vs `my_actual`) → `compute_delta`; `season_deltas()` loops periods, skipping byes.
+- Tests: grid decode + engine wiring with a fake platform (bye → None). **Suite: 20 passing.**
+- Live-validated team `1whync…` over periods 3–6: every period **M1 ≥ actual** and **M1 ≥ M2** (so Δ ≥ 0), e.g. period 5 actual 1–8 vs M1 4–5; sum Δ = 4.0 (avg 1.0 cat/week). Pipeline behaves as designed.
+- **Objective A is now end-to-end functional.** Remaining/optional: confirm slot multiplicities; full 24-period + all-teams season run; then the other methodologies (A-expected vs A-hindsight comparison, Objective C, etc.).
