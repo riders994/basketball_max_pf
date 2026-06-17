@@ -228,10 +228,12 @@ class FantraxPlatform(LeaguePlatform):
         self._api = api
         self._league = League(league_id, session=session) if session else League(league_id)
         self._period_results_cache: dict | None = None
-        # Player performance comes from a pluggable StatSource; default is the
-        # Fantrax-derived one (projections + estimator). Box-score sources plug
-        # in here without touching the optimizer/engine/report.
+        # Player performance comes from pluggable StatSources, routed by
+        # methodology: A-expected from stat_source (Fantrax projections +
+        # estimator by default), A-hindsight from an optional box-score source
+        # attached via use_boxscores(). The optimizer/engine/report are unchanged.
         self.stat_source: StatSource = stat_source or FantraxStatSource(self)
+        self.hindsight_source: StatSource | None = None
         # Finished-season data is immutable, so memoize the expensive fetches.
         # Each (team, period) candidate set is otherwise computed twice (once as
         # a team, once as its opponent's opponent). Keyed by methodology too.
@@ -292,6 +294,21 @@ class FantraxPlatform(LeaguePlatform):
         sp = self._league.scoring_periods[period]
         return [num for num, d in sorted(self._league.scoring_dates.items()) if sp.start <= d <= sp.end]
 
+    def roster_membership(self, team_id: str, daily_period: int) -> dict[str, tuple[str, tuple[str, ...]]]:
+        """scorerId -> (name, eligible positions) for a team's roster on a day.
+
+        Names come from the historical roster itself (not current rosters), so
+        players dropped before now are still resolvable for box-score matching.
+        """
+        out: dict[str, tuple[str, tuple[str, ...]]] = {}
+        for table in self._roster_stats_tables(team_id, daily_period):
+            for row in table.get("rows", []):
+                scorer = row.get("scorer")
+                if scorer:
+                    positions = tuple((scorer.get("posShortNames") or "").split(","))
+                    out[scorer["scorerId"]] = (scorer["name"], positions)
+        return out
+
     def period_candidates(
         self, team_id: str, period: int, methodology: str = "expected"
     ) -> list[list[Candidate]]:
@@ -305,11 +322,21 @@ class FantraxPlatform(LeaguePlatform):
         if cached is not None:
             return cached
         if methodology == "hindsight":
-            result = self.stat_source.hindsight_candidates(team_id, period)
+            if self.hindsight_source is None:
+                raise NotImplementedError(
+                    "no hindsight source attached; call platform.use_boxscores(client)"
+                )
+            result = self.hindsight_source.hindsight_candidates(team_id, period)
         else:
             result = self.stat_source.expected_candidates(team_id, period)
         self._candidates_cache[key] = result
         return result
+
+    def use_boxscores(self, client) -> None:
+        """Attach a basketball-reference box-score source for A-hindsight."""
+        from ..box_bref import BoxScoreStatSource
+
+        self.hindsight_source = BoxScoreStatSource(self, client)
 
     def expected_period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
         """Fantrax-derived A-expected per-day pools (used by FantraxStatSource).

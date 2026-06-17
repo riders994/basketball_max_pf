@@ -34,13 +34,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("league_id", help="Fantrax league id")
     parser.add_argument("--periods", help='e.g. "1-6" or "1,2,5"; default: all', default=None)
     parser.add_argument("--out", default="season_report", help="output path prefix (writes .csv and .md)")
+    parser.add_argument("--methodology", choices=["expected", "hindsight"], default="expected",
+                        help="expected = season-to-date projections; hindsight = realized box scores")
     args = parser.parse_args(argv)
 
     from .platforms.fantrax import FantraxPlatform  # imported here so --help works without the extra
 
     platform = FantraxPlatform(args.league_id)
+    if args.methodology == "hindsight":
+        from .box_bref import BRefClient
+
+        platform.use_boxscores(BRefClient())
     slots = platform.active_slots()
-    rows = season_report(platform, slots, periods=parse_periods(args.periods))
+    rows = season_report(platform, slots, periods=parse_periods(args.periods), methodology=args.methodology)
 
     print(render_table(rows))
 

@@ -40,7 +40,7 @@ class FakePlatform:
     def actual_team_line(self, team_id, period):
         return self._actuals[(team_id, period)]
 
-    def period_candidates(self, team_id, period):
+    def period_candidates(self, team_id, period, methodology="expected"):
         return self._cands[(team_id, period)]
 
 

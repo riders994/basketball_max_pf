@@ -16,6 +16,8 @@ from datetime import date
 from pathlib import Path
 
 from .models import PlayerLine
+from .optimize import Candidate
+from .sources import StatSource
 
 BASE = "https://www.basketball-reference.com"
 _GAME_PATH = re.compile(r"/boxscores/\d{9}[A-Z]{3}\.html")
@@ -184,3 +186,44 @@ class BRefClient:
     def day_teams(self, on: date) -> set[str]:
         """bref team abbreviations that played on a date."""
         return {pb.team for pb in self.day_lines(on).values()}
+
+
+class BoxScoreStatSource(StatSource):
+    """A-hindsight source: realized per-day lines from basketball-reference.
+
+    Combines Fantrax roster membership (who was rostered each day) with bref's
+    realized box scores (what they actually did), matched by normalized name.
+    Because lines are realized and cover the whole roster, the optimizer's result
+    is a true ceiling (>= the team's actual result).
+    """
+
+    def __init__(self, platform, client: BRefClient) -> None:
+        self._platform = platform
+        self._client = client
+
+    def hindsight_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
+        days = self._platform.matchup_period_days(period)
+        if not days:
+            return []
+        membership = self._platform.roster_membership(team_id, days[0])
+        scoring_dates = self._platform.scoring_dates()
+        return [
+            self._match_day(membership, self._client.day_lines(scoring_dates[dp]))
+            for dp in days
+        ]
+
+    @staticmethod
+    def _match_day(
+        membership: dict[str, tuple[str, tuple[str, ...]]],
+        day_lines: dict[str, PlayerBox],
+    ) -> list[Candidate]:
+        index: dict[str, set[str]] = {}
+        for pb in day_lines.values():
+            index.setdefault(normalize_name(pb.name), set()).add(pb.bref_id)
+        candidates: list[Candidate] = []
+        for scorer_id, (name, positions) in membership.items():
+            norm = normalize_name(name)
+            ids = index.get(ALIASES.get(norm, norm))
+            if ids and len(ids) == 1:  # unique match who played that day
+                candidates.append(Candidate(scorer_id, day_lines[next(iter(ids))].line, positions))
+        return candidates

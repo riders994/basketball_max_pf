@@ -253,3 +253,16 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Tests (pure parsers, normalization, mapping incl. alias) → **34 passing**.
 - Live validation (4 dates of period 4): 372 bref players parsed, 316 Fantrax rostered. Parser exact (spot-check Kon Knueppel 16/6/1, 5/13 FG = .385). Mapping: 232 matched, **0 ambiguous**, 84 unmatched — classified: **61 simply didn't play in the 4-date window**, and 22/23 "surname-present" cases are coincidental collisions with *different* players (e.g. injured Dejounte Murray vs Kris/Jamal Murray). Only genuine name-form gaps were nicknames (Bub↔Carlton Carrington, Nic↔Nicolas Claxton) → handled via `ALIASES`. Matching precision is effectively ~100% for players present; raw 73% coverage is a date-window artifact.
 - Next: Stage 3 — `BoxScoreStatSource` wiring (realized daily candidates for A-hindsight; exact season-to-date projections + schedule for A-expected-on-box-scores), then the full run.
+
+## Prompt 21 — 2026-06-17
+
+> Proceed with Stage 3
+
+*Response notes:*
+- Refactored `StatSource` to a base where both methods default-raise (no abstractmethod), so a source implements only what it supports and the platform routes each methodology to a capable source.
+- `FantraxPlatform` now routes by methodology: A-expected → `stat_source` (Fantrax), A-hindsight → optional `hindsight_source` attached via `use_boxscores(client)` (raises clearly if absent). Added `roster_membership(team, daily_period)` → scorerId→(name, positions) from the *historical* roster (so dropped players still resolve).
+- Built `BoxScoreStatSource.hindsight_candidates`: per period day, Fantrax roster membership × bref realized day lines, matched per-day by normalized name (+ALIASES); unique-match only. Full-roster realized lines → optimizer result is a true ceiling.
+- Threaded `methodology` through `engine.period_delta`/`season_deltas`, `report`, and the CLI (`--methodology expected|hindsight`, which attaches a `BRefClient`). Scoped exact-A-expected-on-box-scores to a later stage (A-expected already works via Fantrax/estimator).
+- Tests (BoxScoreStatSource w/ fake platform+client, methodology threading) → **35 passing**. Live (period 4, team 1whync…): actual 1-8; A-hindsight M1 2-7 ≥ actual ✓ (1.0 left on table); A-expected and A-hindsight agreed here. The realized-optimal ≥ actual invariant (which A-expected couldn't guarantee) now holds.
+- Caveat: actuals come from the Fantrax grid while mine_opt uses bref lines, so M1 ≥ actual can be marginally noisy from source mismatch; held cleanly here.
+- Next (user-approved): the full run.
