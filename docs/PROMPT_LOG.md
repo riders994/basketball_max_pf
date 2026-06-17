@@ -144,3 +144,27 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Scaffolded an installable `max_pf` package (hatchling build, `src/` layout, Python ≥3.11). Fork referenced as optional extra: `fantraxapi @ git+https://github.com/riders994/FantraxAPI@stable`.
 - Modules: `categories` (9-cat defs + scipId map + percentage/lower-is-better flags), `models` (PlayerLine/TeamLine aggregation via makes+attempts), `estimators` (the Prompt-9 attempts estimator + position priors), `metric` (catwins W/L/D triplet, points-for, M1/M2/Δ), `platforms/base` (abstract platform interface), `platforms/fantrax` (fork adapter: verified scipId decode + header-based transaction date fix; data-fetch methods stubbed), `optimize` + `projections` (documented stubs for the daily optimizer and A-expected builder).
 - Fully implemented + unit-tested the pure pieces (estimators, metric); platform fetch + optimizer left as next build step.
+
+## Prompt 11 — 2026-06-16
+
+> commit the scaffold first, then start
+
+*Response notes:*
+- Committed the scaffold to `primary` (`df18b9b`) — solo trunk; user directed a direct commit-and-continue flow.
+- Started build step #1 (A-expected projection builder):
+  - **Gotcha discovered:** Fantrax uses DIFFERENT stat ids for per-player *daily totals* vs *season per-game* rates. Only FG% (1520) and FT% (1550) share ids. Daily: PTS 1390, 3PTM 1435, REB 1400, AST 1250, STL 1410, BLK 1260, TO 1460. Per-game: PTS 1590, 3PTM 1620, REB 1600, AST 1470, STL 1610, BLK 1480, TO 1650, GP 1350. → moved all Fantrax scipId maps OUT of `categories.py` (now provider-agnostic) and INTO `platforms/fantrax.py` as `DAILY_STAT_SCIP` / `PERGAME_STAT_SCIP`.
+  - Roster STATS columns carry stable `scipId`/`key` per header cell, so the parser keys off ids, not English names.
+  - Implemented `decode_roster_stats()` (per-game lines, makes/attempts via the estimator), `season_to_date_rates(team, period)`, and `project_period_line(per_game, games)` scaler. Added `tests/test_projections.py`. **Full suite: 12 passing.**
+  - Live-validated against `wserh14rmbbpqtcg` period 83: 19 players parsed, realistic per-game lines, all FG%/FT% in [0,1].
+- Remaining for #1 (next): the **games-in-period schedule join** to turn per-game projections into per-matchup-period projections. This work is uncommitted.
+
+## Prompt 12 — 2026-06-16
+
+> Yes, finish and commit
+
+*Response notes:*
+- Finished build step #1 (A-expected projection builder), committed as its own unit.
+- **Schedule-join finding:** for a finished season, `SCHEDULE_FULL` collapses to the last game of the year (fork-documented) — useless for per-week game counts. Used the STATS view's **"Opponent" column** instead: a non-empty cell = the player's NBA team played that day, regardless of started/benched. Counted games by sweeping the matchup week's ~7 daily roster views (`players_with_game()`).
+- Implemented `FantraxPlatform.projected_roster_lines(team_id, period)`: season-to-date per-game rates as of the period's first day, scaled per player by games-in-period; `matchup_period_days()` maps a matchup period to its daily periods. Renamed the base interface method `projected_player_lines` → `projected_roster_lines(team_id, period)` (team-scoped is what the optimizer consumes). v1 simplification: players added mid-period are not projected.
+- Live-validated on `wserh14rmbbpqtcg` period 4: 7 daily periods, 14 players with games, implied 3–4 games/player, projected lines scale correctly, FG%/FT% in range. **Suite: 13 passing.**
+- Next up: build step #2/#3 — `roster_day` + games-played caps, then the daily best-response optimizer (`optimize.best_response`).

@@ -1,24 +1,32 @@
-"""A-expected projections -- build step after the scaffold.
+"""A-expected projections.
 
-Turn a platform's per-player season-to-date per-game rates (as of a period) plus
-the period's game schedule into projected per-player period lines, which the
-optimizer then assembles into ``mine_opt`` / ``their_opt`` under Objective A.
+Turn a player's season-to-date **per-game** line (parsed from the platform's
+roster STATS view) into a projected line for a matchup period::
 
-Projection (per player, per matchup period):
-    projected_line = per_game_rate * games_scheduled_in_period
+    projected_line = per_game_line * games_scheduled_in_period
 
-FG%/FT% per-game rates are converted to makes/attempts up front (via
-:func:`max_pf.estimators.estimate_attempts` on the per-game line) so the volume
-scales correctly with games played.
+Because per-game lines already carry makes/attempts (estimated from the per-game
+rates), scaling is linear and FG%/FT% stay correct after aggregation.
+
+Still to wire (next sub-step): the games-in-period count per player, which comes
+from joining the NBA schedule to each player's team over the period's date range.
 """
 from __future__ import annotations
+
+from dataclasses import fields
 
 from .models import PlayerLine
 
 
 def project_period_line(per_game: PlayerLine, games_in_period: int) -> PlayerLine:
-    """Scale a per-game line by the number of scheduled games.
+    """Scale a per-game line by the number of scheduled games in the period.
 
-    Not yet implemented -- see module docstring.
+    Every field of ``PlayerLine`` (counting stats and makes/attempts) scales by
+    the game count, so derived FG%/FT% are unchanged at the player level and
+    aggregate correctly across a lineup.
     """
-    raise NotImplementedError("A-expected projection builder is the next build step")
+    if games_in_period < 0:
+        raise ValueError("games_in_period must be non-negative")
+    return PlayerLine(
+        **{f.name: getattr(per_game, f.name) * games_in_period for f in fields(PlayerLine)}
+    )

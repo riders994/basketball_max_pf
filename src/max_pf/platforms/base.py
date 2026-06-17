@@ -40,5 +40,9 @@ class LeaguePlatform(ABC):
         """All players' realized lines on a date, keyed by player id (A-hindsight)."""
 
     @abstractmethod
-    def projected_player_lines(self, period: int) -> dict[str, PlayerLine]:
-        """Per-player season-to-date per-game projections as of a period (A-expected)."""
+    def projected_roster_lines(self, team_id: str, period: int) -> dict[str, PlayerLine]:
+        """Per-player projected period lines for a team's roster (A-expected).
+
+        Season-to-date per-game rates as of the period start, scaled by each
+        player's games scheduled in the matchup period. Keyed by player id.
+        """
