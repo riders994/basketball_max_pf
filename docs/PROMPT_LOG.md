@@ -212,3 +212,33 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Live subset run (periods 1–3, all 16 teams) printed the table and wrote both files. ✅ feature works.
 - **KEY FINDING:** several teams showed **M1 < Actual** (Eff% > 100%). Not a bug — it's the ex-ante/ex-post gap: `mine_opt` uses **A-expected projections** while `Actual` is **realized**, so a team that ran hot beats its projection-optimum. The "Left/Eff%" columns carried an A-hindsight meaning that's invalid for A-expected. Relabeled: dropped Left/Eff%, added **Luck = Actual − M1** (projection variance), and documented that a true lineup-management efficiency (realized-optimal ≥ realized-actual) needs the **A-hindsight** variant.
 - Recommend building **A-hindsight** next (realized per-day lines via `player_day_lines`) — it's the variant that makes the "max points for" ceiling/efficiency interpretation valid. Full 24-period × 16-team run is available via the CLI (slow, ~a few min); offered to run it in the background and commit the artifact.
+
+## Prompt 17 — 2026-06-17
+
+> Build A-hindsight first, then the full run
+
+*Response notes:*
+- Started A-hindsight; probed the live-scoring response to confirm the candidate source. **Hard data limit found:** `getLiveScoringStats(date)` carries realized per-player daily 9-cat lines only in the **ACTIVE** bucket (started players). `scorerMap` groups roster by status (incl. BENCH) but is metadata only — no stat line; `allPlayerStats` is a bool flag; `playerGameInfo` is a header. So **benched/reserve players' realized daily stats are NOT available from Fantrax.**
+- Consequence — the A-hindsight design forks:
+  - **Full A-hindsight** (the true "best lineup from your whole roster" ceiling) needs an **external NBA box-score source** (e.g. nba_api/stats.nba.com, public/no-auth) joined to Fantrax players by name(+team). Adds an optional dependency + an ID-mapping step.
+  - **Partial A-hindsight (Fantrax-only):** candidates = the players actually STARTED each day; optimizer can only *bench* them (never add a bench player). Valid ≥-actual ceiling but only captures the "sit a starter who hurt your FG%/FT%/TO" lever — not "you started the wrong guy."
+  - (Reconstruct-by-differencing cumulative roster STATS snapshots is possible but too rounding-noisy, esp. for FG%/FT%; rejected.)
+- Paused coding to get the user's call on the A-hindsight data source rather than ship a partial metric or silently add an external dependency.
+
+## Prompt 18 — 2026-06-17
+
+> Since we're moving to full box-score anyway, shouldn't we apply this methodology to the earlier processes?
+
+*Response notes:*
+- Agreed. Box scores become the **canonical player-performance + schedule source for BOTH methodologies**, not just hindsight. Wins: FG/FT attempts become **exact** (estimator → fallback only), A-expected season-to-date rates become exact, games-in-period comes from the real schedule (replaces the costly ~7-call/team/period Opponent sweep and fixes started-vs-scheduled). Fantrax stays source of truth for league structure (rosters, slots, matchups, **actual results**, transactions).
+- Reachability probe from this sandbox: **stats.nba.com → HTTP 000 (blocked)**, **basketball-reference → 200 (reachable)**, `nba_api` installable from PyPI (but runtime hits the blocked stats.nba.com). → implement/validate the box-score source against **bref here**; keep `nba_api` as a drop-in for the user's local runs.
+- Architecture: a pluggable **`StatSource`** seam (`FantraxStatSource` = current behavior/fallback; `BoxScoreStatSource` = exact, Stage 2). Optimizer/engine/report unchanged. Staged plan: (1) seam + refactor, (2) bref source + name→id mapping, (3) wire A-hindsight + A-expected-on-box-scores, then full run.
+
+## Prompt 19 — 2026-06-17
+
+> Start stage 1, bref primary with estimator fallback
+
+*Response notes:*
+- Stage 1 done + committed. Added `sources.py` (`StatSource` ABC: `expected_candidates`, and `hindsight_candidates` defaulting to a loud NotImplementedError). `FantraxPlatform` now holds an injectable `self.stat_source` (default `FantraxStatSource`), and `period_candidates(team, period, methodology="expected"|"hindsight")` routes through it (cache keyed by methodology). Renamed the raw Fantrax logic to `expected_period_candidates`.
+- Tests for the seam → **29 passing**. Live no-regression: period 6 reproduces actual 4-5 / M1 6-3 / M2 4-5 / Δ 2.0; Fantrax hindsight path raises clearly.
+- Next: Stage 2 — `BoxScoreStatSource` (bref): per-date box scores → (player, date) 9-cat w/ makes/attempts + schedule, name→`scorerId` mapping with a coverage report.

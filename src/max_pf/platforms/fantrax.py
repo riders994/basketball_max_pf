@@ -15,6 +15,7 @@ from datetime import date
 from ..estimators import estimate_attempts
 from ..models import PlayerDay, PlayerLine, RosterDay
 from ..optimize import Candidate, Slot
+from ..sources import StatSource
 from .base import LeaguePlatform
 
 # How a slot's short name expands to the player position tags it accepts.
@@ -214,7 +215,7 @@ def transaction_date_column(header_cells: list[dict]) -> int:
 class FantraxPlatform(LeaguePlatform):
     """Normalized adapter over a fantraxapi ``League``."""
 
-    def __init__(self, league_id: str, session=None) -> None:
+    def __init__(self, league_id: str, session=None, stat_source: StatSource | None = None) -> None:
         try:
             from fantraxapi import League
         except ImportError as e:  # pragma: no cover - only without the extra
@@ -227,10 +228,14 @@ class FantraxPlatform(LeaguePlatform):
         self._api = api
         self._league = League(league_id, session=session) if session else League(league_id)
         self._period_results_cache: dict | None = None
+        # Player performance comes from a pluggable StatSource; default is the
+        # Fantrax-derived one (projections + estimator). Box-score sources plug
+        # in here without touching the optimizer/engine/report.
+        self.stat_source: StatSource = stat_source or FantraxStatSource(self)
         # Finished-season data is immutable, so memoize the expensive fetches.
         # Each (team, period) candidate set is otherwise computed twice (once as
-        # a team, once as its opponent's opponent).
-        self._candidates_cache: dict[tuple[str, int], list[list[Candidate]]] = {}
+        # a team, once as its opponent's opponent). Keyed by methodology too.
+        self._candidates_cache: dict[tuple[str, int, str], list[list[Candidate]]] = {}
 
     def team_ids(self) -> list[str]:
         return [t.id for t in self._league.teams]
@@ -275,23 +280,33 @@ class FantraxPlatform(LeaguePlatform):
         sp = self._league.scoring_periods[period]
         return [num for num, d in sorted(self._league.scoring_dates.items()) if sp.start <= d <= sp.end]
 
-    def period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
-        """Per-day candidate pool for the optimizer (A-expected).
+    def period_candidates(
+        self, team_id: str, period: int, methodology: str = "expected"
+    ) -> list[list[Candidate]]:
+        """Per-day candidate pool for the optimizer, via the configured StatSource.
 
-        Each day lists the players who have a game that day, carrying their
-        season-to-date per-game line (as of the period start) and eligible
-        positions. Summing a player's candidate days reproduces their projected
-        period total, so the optimizer's "start everyone" equals the projection.
-        Players added mid-period are not projected (v1). Memoized per (team, period).
+        ``methodology`` is ``"expected"`` (season-to-date projections) or
+        ``"hindsight"`` (realized lines). Memoized per (team, period, methodology).
         """
-        cached = self._candidates_cache.get((team_id, period))
+        key = (team_id, period, methodology)
+        cached = self._candidates_cache.get(key)
         if cached is not None:
             return cached
-        result = self._compute_period_candidates(team_id, period)
-        self._candidates_cache[(team_id, period)] = result
+        if methodology == "hindsight":
+            result = self.stat_source.hindsight_candidates(team_id, period)
+        else:
+            result = self.stat_source.expected_candidates(team_id, period)
+        self._candidates_cache[key] = result
         return result
 
-    def _compute_period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
+    def expected_period_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
+        """Fantrax-derived A-expected per-day pools (used by FantraxStatSource).
+
+        Each day lists players with a game that day, carrying their season-to-date
+        per-game line (as of period start) and eligible positions. Summing a
+        player's candidate days reproduces their projected period total. Players
+        added mid-period are not projected (v1).
+        """
         days = self.matchup_period_days(period)
         if not days:
             return []
@@ -358,3 +373,17 @@ class FantraxPlatform(LeaguePlatform):
 
     def player_day_lines(self, on: date) -> dict[str, PlayerDay]:
         raise NotImplementedError("decode getLiveScoringStats(on) via decode_player_day_stats")
+
+
+class FantraxStatSource(StatSource):
+    """A-expected source backed by Fantrax roster STATS + the FG/FT estimator.
+
+    Cannot supply A-hindsight: Fantrax exposes daily lines only for started
+    players, so ``hindsight_candidates`` keeps the base NotImplementedError.
+    """
+
+    def __init__(self, platform: FantraxPlatform) -> None:
+        self._platform = platform
+
+    def expected_candidates(self, team_id: str, period: int) -> list[list[Candidate]]:
+        return self._platform.expected_period_candidates(team_id, period)
