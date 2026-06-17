@@ -275,3 +275,13 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - Ran the **full-season A-expected report** (all 16 teams × 24 periods) as a tracked background task; committed `season_report.csv`/`.md`. Over the full season **M1 ≥ Actual for every team** (Luck all negative, −9.5…−66) — the expected-ceiling-vs-actual gap is sensible once weekly variance averages out, and accumulated lineup inefficiency shows. Δ (opponent-mismanagement dividend) ranges 7–73 (dbyun89 an outlier at 73, M2 only 38). Top of table: ZuPacalypse Now (Actual 150.5, M1 160).
 - Per the user, runs are **sequential, not concurrent**; the `BRefClient` is single-request at ~3.5s spacing with on-disk caching (resumable), so the A-hindsight crawl won't overlap the Fantrax run and stays polite.
 - Launching the full **A-hindsight** season run next → `season_report_hindsight.*` (kept separate so both methodologies can be compared).
+
+## Prompt 23 — 2026-06-17
+
+> I updated the fork for the fantrax repo at the same tag (@stable). please update where necessary
+
+*Response notes:*
+- Re-cloned `@stable` to a fresh dir (didn't touch the in-flight hindsight run's `/tmp/FantraxAPI_ref`, already loaded in memory) and diffed. Changes are **additive** (salary cap / draft picks / cap-hit penalties on `Roster`; `ScoringCategory` on `LivePlayer` — the fork now parses per-player per-day category stats natively, the `object2` we decoded by hand; `category_winners` on `H2HRotisserie2`) plus **bugfixes** (transaction history now paginates via `pageNumber`/`paginatedResultSet`; `scoring_dates` key building no longer string-munges `strftime`; `ScoringPeriod.complete/current` boundaries made inclusive/mutually exclusive).
+- **Verified our adapter is fully compatible:** the surface we use is unchanged — `H2HRotisserie2.scoring_grid/.home/.away`, `api.get_team_roster_info`, `scoring_period_results(playoffs=False)`, `League`/`positions`/`scoring_dates`/`scoring_periods`. Our raw-table parsing keys off `scipId`/header `key`, so the new salary/age columns don't shift anything. We don't use `get_transaction_history`/`.transactions()`/`Roster`/`get_live_scoring_stats` at runtime.
+- **Only change needed:** removed the now-obsolete `transaction_date_column` workaround (dead code; upstream fixed transaction pagination + parsing). Suite still **35 passing**. `pyproject` pin is `@stable` so installs auto-get the update — no pin change.
+- Deferred (no-concurrency): live re-validation against the new fork once the hindsight run finishes; the in-flight hindsight artifact uses the prior fork (date mapping validated correct for this league, so unaffected in practice).

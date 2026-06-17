@@ -198,20 +198,6 @@ def team_line_from_grid(grid: dict[str, dict[str, float]], team_id: str) -> Play
     return line
 
 
-def transaction_date_column(header_cells: list[dict]) -> int:
-    """Locate the date column index from the transaction-table header.
-
-    The fork assumes ``cells[1]`` which is wrong for some leagues; resolve from
-    the header instead (mirrors how Standings does it).
-    """
-    for i, cell in enumerate(header_cells):
-        label = (cell.get("name") or cell.get("shortName") or "").lower()
-        key = (cell.get("key") or "").lower()
-        if "date" in label or "date" in key or key in {"period", "txdate"}:
-            return i
-    return 1  # last-resort fallback to the fork's historical assumption
-
-
 class FantraxPlatform(LeaguePlatform):
     """Normalized adapter over a fantraxapi ``League``."""
 
