@@ -38,10 +38,13 @@ FG% and FT% are aggregated correctly across a lineup via Σmakes / Σattempts
 The best-response above is **Objective A** (the default, `--objective catwins`):
 each side optimizes category wins against the other's *actual* lineup. The
 optimizer's objective is pluggable, with two opponent-independent alternatives
-that play a fixed best lineup and report catwins as a readout: **Objective B**
-(`--objective zscore`) maximizes total **z-score value** (scarcity-weighted), and
-**Objective C** (`--objective raw`) maximizes total **raw output** (scarcity-blind,
-volume-chasing). See [Roadmap](#roadmap).
+that report catwins as a readout: **Objective B** (`--objective zscore`) maximizes
+total **z-score value** (scarcity-weighted), and **Objective C** (`--objective raw`)
+maximizes total **raw output** (scarcity-blind, volume-chasing). Both *bench
+below-replacement (negative-value) players* — since value prices in FG%/FT%
+volume-impact and turnovers, dropping them protects the ratio cats and TO that
+swing a week (C, whose raw value is almost always positive, benches far less).
+See [Roadmap](#roadmap).
 
 ## Two methodologies
 

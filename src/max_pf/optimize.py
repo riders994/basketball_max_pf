@@ -123,40 +123,41 @@ def objective_catwins(started: list[list["Candidate"]], target: PlayerLine) -> t
 
 
 def _value_objective(value_fn: Callable[[PlayerLine], float]) -> Objective:
-    """An opponent-independent objective: field a full lineup chosen by value.
+    """An opponent-independent objective: maximize the lineup's total value.
 
-    Returns ``(games_started, total_value)`` so the search **fills the lineup
-    first** (you always field a full team in counting-cat H2H), then among full
-    lineups maximizes ``Σ value_fn(player)``. Without the games-started term, a
-    pure value-sum would bench every below-replacement (negative-value) player
-    and field a partial lineup. ``value_fn`` scores one candidate's
-    (per-game-scale) line; ``target`` is ignored.
+    Sums ``value_fn`` over the started players; ``target`` is ignored. A
+    below-replacement player has negative value (for the z-score model, ~half the
+    pool is below the league mean) and so is **benched** — which is the point:
+    value already prices in FG%/FT% volume-impact and (subtracted) turnovers, so
+    dropping a negative-value player protects the ratio categories and TO that
+    can swing a week. The lineup is therefore the set of net-positive players,
+    not necessarily a full slate. ``value_fn`` scores one candidate's
+    (per-game-scale) line.
     """
 
-    def objective(started: list[list["Candidate"]], target: PlayerLine) -> tuple[int, float]:
-        games = sum(len(day) for day in started)
-        return games, sum(value_fn(c.line) for day in started for c in day)
+    def objective(started: list[list["Candidate"]], target: PlayerLine) -> float:
+        return sum(value_fn(c.line) for day in started for c in day)
 
     return objective
 
 
 def make_total_z_objective(model) -> Objective:
-    """Objective B: field a full lineup chosen by z-score value (scarcity-weighted).
+    """Objective B: maximize total z-score value (scarcity-weighted, opponent-independent).
 
-    Opponent-independent; among full lineups it maximizes total z-value, so it
-    prefers players who are scarce/valuable across categories. catwins becomes a
+    Starts only net-positive-value players, benching below-replacement ones to
+    protect the ratio cats / TO that value already prices in. catwins becomes a
     *readout* on the result, not what was optimized.
     """
     return _value_objective(model.value)
 
 
 def make_total_raw_objective(model) -> Objective:
-    """Objective C: field a full lineup chosen by raw output (scarcity-blind).
+    """Objective C: maximize total raw output (scarcity-blind, opponent-independent).
 
     Same population/model as Objective B but values players by
-    :meth:`ZScoreModel.raw_value` (no std weighting), so it prefers high-volume
-    production rather than balanced rarity. Opponent-independent; catwins is a
-    readout.
+    :meth:`ZScoreModel.raw_value` (no std weighting), so it chases high-volume
+    production rather than balanced rarity. Raw value is almost always positive,
+    so C benches far less than B. Opponent-independent; catwins is a readout.
     """
     return _value_objective(model.raw_value)
 
