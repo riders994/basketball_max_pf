@@ -65,8 +65,9 @@ the **ex-ante vs ex-post** fork, and the package implements both:
 
 ## Data sources
 
-- **Fantrax** (via the [stable fork of FantraxAPI](https://github.com/riders994/FantraxAPI/releases/tag/stable))
-  is the source of truth for league structure: rosters (incl. historical daily
+- **Fantrax** (via the [stable fork of FantraxAPI](https://github.com/riders994/FantraxAPI),
+  **vendored** under `max_pf._vendor` — see `src/max_pf/_vendor/NOTICE.md`) is the
+  source of truth for league structure: rosters (incl. historical daily
   membership), active-slot config, matchup schedule, and **actual results**.
   Public leagues read with only the league id (no credentials).
 - **basketball-reference** supplies exact per-player per-day 9-cat lines with
@@ -80,12 +81,13 @@ report are identical across methodologies.
 ## Install
 
 ```bash
-pip install -e ".[fantrax,boxscores]"   # add 'dev' for the test suite
+pip install -e ".[boxscores]"   # add 'dev' for the test suite
 ```
 
-`fantrax` pulls the FantraxAPI fork at `@stable`; `boxscores` pulls
-beautifulsoup4 for the basketball-reference source; `yaml` adds YAML login-file
-support on the CLI (JSON works without it). (Per packaging convention, all
+The Fantrax adapter works out of the box — its API client is vendored, so there
+is no VCS/URL dependency (and the package installs cleanly from PyPI). `boxscores`
+pulls beautifulsoup4 for the basketball-reference source; `yaml` adds YAML
+login-file support on the CLI (JSON works without it). (Per packaging convention, all
 version specifiers are `>=` for compatibility.)
 
 ## Usage

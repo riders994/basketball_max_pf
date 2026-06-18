@@ -202,14 +202,9 @@ class FantraxPlatform(LeaguePlatform):
     """Normalized adapter over a fantraxapi ``League``."""
 
     def __init__(self, league_id: str, session=None, stat_source: StatSource | None = None) -> None:
-        try:
-            from fantraxapi import League
-        except ImportError as e:  # pragma: no cover - only without the extra
-            raise ImportError(
-                'The Fantrax adapter requires the optional dependency: '
-                'pip install "max-pf[fantrax]"'
-            ) from e
-        from fantraxapi import api  # noqa: F401 (kept for fetch methods below)
+        # fantraxapi is vendored (src/max_pf/_vendor) so installs need no VCS dep.
+        from .._vendor.fantraxapi import League
+        from .._vendor.fantraxapi import api
 
         self._api = api
         self._league = League(league_id, session=session) if session else League(league_id)

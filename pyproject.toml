@@ -13,25 +13,22 @@ authors = [{ name = "Rohan V" }]
 keywords = ["fantasy", "basketball", "9-cat", "fantrax", "optimization"]
 # Convention: dependency version constraints use `>=` (lower bound only), never
 # `==`/`~=`/upper caps, for the broadest install compatibility.
+# requests is required at runtime: the vendored fantraxapi adapter and the
+# basketball-reference client both use it. The Fantrax fork itself is vendored
+# (src/max_pf/_vendor) so there is no VCS/URL dependency to upset PyPI.
 dependencies = [
     "requests>=2.28",
 ]
 
 [project.optional-dependencies]
-# The Fantrax platform adapter wraps the stable fork of FantraxAPI.
-fantrax = ["fantraxapi @ git+https://github.com/riders994/FantraxAPI@stable"]
 # External box-score source (basketball-reference) for exact stats / A-hindsight.
-boxscores = ["beautifulsoup4>=4.12", "requests>=2.28"]
+boxscores = ["beautifulsoup4>=4.12"]
 # YAML login files on the command line (JSON works without this).
 yaml = ["pyyaml>=6"]
 dev = ["pytest>=7", "pyyaml>=6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/max_pf"]
-
-[tool.hatch.metadata]
-# Allow the direct git reference in the `fantrax` extra.
-allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
