@@ -1,4 +1,4 @@
-from max_pf.engine import period_delta, season_deltas
+from max_pf.engine import nash_ceiling, period_delta, season_deltas
 from max_pf.metric import catwins
 from max_pf.models import PlayerLine
 from max_pf.optimize import Candidate, Slot
@@ -105,3 +105,36 @@ def test_bye_period_returns_none():
     plat = FakePlatform(opp={("me", 5): None}, actuals={}, cands={})
     assert period_delta(plat, "me", 5, SLOTS) is None
     assert season_deltas(plat, "me", [5], SLOTS) == {}
+    assert nash_ceiling(plat, "me", 5, SLOTS) is None
+
+
+def test_nash_converges_to_fixed_point():
+    # One dominant candidate per side -> best response is constant -> the pair is
+    # immediately a mutual best response (pure Nash equilibrium).
+    me = _cand("M", pts=30, reb=10, ast=8)
+    opp = _cand("O", pts=20, reb=12, ast=4)
+    plat = FakePlatform(
+        opp={("me", 1): "opp"},
+        actuals={("me", 1): PlayerLine(), ("opp", 1): PlayerLine()},  # seed != optimum
+        cands={("me", 1): [[me]], ("opp", 1): [[opp]]},
+    )
+    res = nash_ceiling(plat, "me", 1, [Slot("Flx")])
+    assert res.converged
+    assert res.mine.pts == 30 and res.theirs.pts == 20
+    assert res.m3 == catwins(me.line, opp.line)
+
+
+def test_nash_detects_cycle_when_no_pure_equilibrium():
+    # Cyclic dominance over pts/reb/ast (a 4-cycle A>X>B>Y>A): best responses
+    # chase each other forever, so there is no pure-strategy equilibrium.
+    A = _cand("A", pts=2, reb=2, ast=0)
+    B = _cand("B", pts=0, reb=2, ast=2)
+    X = _cand("X", pts=1, reb=0, ast=3)
+    Y = _cand("Y", pts=3, reb=1, ast=1)
+    plat = FakePlatform(
+        opp={("me", 1): "opp"},
+        actuals={("me", 1): A.line, ("opp", 1): X.line},
+        cands={("me", 1): [[A, B]], ("opp", 1): [[X, Y]]},
+    )
+    res = nash_ceiling(plat, "me", 1, [Slot("Flx")], max_rounds=50)
+    assert not res.converged

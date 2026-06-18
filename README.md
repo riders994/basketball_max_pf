@@ -152,7 +152,12 @@ projection useful before results are in.
   side's max-raw-output lineup (same league-wide population as B, but values
   players without scarcity weighting, so it chases volume); opponent-independent,
   catwins as a readout.
-- Nash "mutual ceiling" (two-player equilibrium).
+- Nash "mutual ceiling" (two-player equilibrium): stage 1 done —
+  `engine.nash_ceiling` runs iterated best response to the fixed point where each
+  lineup best-responds to the other (pure-strategy Nash), yielding **M3** = the
+  both-sides-optimal category split; it flags cycles (no pure equilibrium). On
+  the test league it converges in ~80% of periods. Stage 2 (mixed-strategy /
+  minimax value via double-oracle LP) would resolve the cycling periods.
 - Nash "mutual ceiling" (two-player equilibrium) as an advanced methodology.
 
 See [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.

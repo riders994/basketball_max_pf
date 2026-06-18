@@ -21,9 +21,11 @@ See docs/PROMPT_LOG.md.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
-from .metric import DeltaResult, compute_delta
+from .categories import CATEGORY_KEYS
+from .metric import CategoryResult, DeltaResult, catwins, compute_delta
 from .models import PlayerLine
 from .optimize import (
     Candidate,
@@ -102,6 +104,95 @@ def season_deltas(
     out: dict[int, DeltaResult] = {}
     for period in periods:
         result = period_delta(platform, team_id, period, slots, methodology, objective)
+        if result is not None:
+            out[period] = result
+    return out
+
+
+# --- Nash mutual ceiling (stage 1: iterated best response) --------------------
+
+
+@dataclass
+class NashResult:
+    """Outcome of the iterated best-response search for one matchup period.
+
+    ``converged`` is True when the dynamics reached a fixed point — a pure-strategy
+    Nash equilibrium where each lineup is a best response to the other (the mutual
+    ceiling). False means the best responses cycled (no pure equilibrium; the
+    mixed-strategy value needs stage 2) or the round cap was hit.
+    """
+
+    converged: bool
+    rounds: int
+    mine: PlayerLine        # my equilibrium / terminal lineup line
+    theirs: PlayerLine      # opponent's
+    m3: CategoryResult      # catwins(mine, theirs) at the (terminal) state
+
+    @property
+    def m3_pf(self) -> float:
+        return self.m3.points_for
+
+
+def _line_key(line: PlayerLine) -> tuple[float, ...]:
+    """Hashable identity of a line for fixed-point / cycle detection."""
+    vals = line.category_values()
+    return tuple(round(vals[k], 6) for k in CATEGORY_KEYS)
+
+
+def nash_ceiling(
+    platform: SupportsMaxPF,
+    team_id: str,
+    period: int,
+    slots: list[Slot],
+    methodology: str = "expected",
+    max_rounds: int = 50,
+) -> NashResult | None:
+    """Iterated best response toward the mutual (Nash) ceiling for one period.
+
+    Both sides simultaneously best-respond (catwins) to the other's *current*
+    lineup, seeded from the actual lineups. A fixed point — where each lineup is a
+    best response to the other — is a pure-strategy Nash equilibrium: the score
+    when both manage perfectly against each other. If the dynamics revisit a state
+    the best responses cycle (no pure equilibrium), reported as not converged.
+    Returns ``None`` for a bye. Always uses the catwins objective (the game's
+    payoff); Objectives B/C are opponent-independent and have no equilibrium.
+    """
+    opponent = platform.matchup_opponent(team_id, period)
+    if opponent is None:
+        return None
+
+    my_cands = platform.period_candidates(team_id, period, methodology)
+    opp_cands = platform.period_candidates(opponent, period, methodology)
+    mine = platform.actual_team_line(team_id, period)
+    theirs = platform.actual_team_line(opponent, period)
+
+    seen: set[tuple] = set()
+    for r in range(1, max_rounds + 1):
+        new_mine = best_response(my_cands, slots, theirs).line
+        new_their = best_response(opp_cands, slots, mine).line
+        # Fixed point: each current lineup already best-responds to the other.
+        if _line_key(new_mine) == _line_key(mine) and _line_key(new_their) == _line_key(theirs):
+            return NashResult(True, r, mine, theirs, catwins(mine, theirs))
+        state = (_line_key(mine), _line_key(theirs))
+        if state in seen:  # revisited a state -> deterministic cycle
+            return NashResult(False, r, mine, theirs, catwins(mine, theirs))
+        seen.add(state)
+        mine, theirs = new_mine, new_their
+
+    return NashResult(False, max_rounds, mine, theirs, catwins(mine, theirs))
+
+
+def season_nash(
+    platform: SupportsMaxPF,
+    team_id: str,
+    periods: list[int],
+    slots: list[Slot],
+    methodology: str = "expected",
+) -> dict[int, NashResult]:
+    """Compute ``nash_ceiling`` for each period, skipping byes."""
+    out: dict[int, NashResult] = {}
+    for period in periods:
+        result = nash_ceiling(platform, team_id, period, slots, methodology)
         if result is not None:
             out[period] = result
     return out
