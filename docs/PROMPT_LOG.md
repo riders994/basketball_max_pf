@@ -1,0 +1,422 @@
+# Prompt Log
+
+A running log of every prompt issued for this project, with notes on the assistant's response. Newest entries appended at the bottom.
+
+Format:
+- **Prompt N — YYYY-MM-DD** (verbatim or lightly trimmed prompt)
+- *Response notes:* what was produced / decided / open questions raised.
+
+---
+
+## Prompt 1 — 2026-06-16
+
+> I am going to start a new project in this repo. For this project I want a saved prompt log with every prompt I produce and notes on your responses. I want to create a methodology for calculating the "max points for" metric for a 9-cat fantasy basketball league. I want to turn this methodology into a python package anyone can use. All they have to do is give their league platform and whatever necessary credentials for that platform to get that information. We're going to start with fantrax. I have a stable fork of the python package here: https://github.com/riders994/FantraxAPI/releases/tag/stable. This project is complicated so we should work on multiple methodologies to evaluate. Let's start with you asking some starting questions to see where we should begin.
+
+*Response notes:*
+- Created this prompt log (`docs/PROMPT_LOG.md`).
+- Confirmed environment: Python 3.12.3, fresh repo with only LICENSE + README.
+- Asked starting questions covering: (1) the precise definition of "max points for", (2) lineup cadence (daily vs weekly), (3) benchmark/opponent model (actual H2H vs all-play), (4) how much real-world roster-constraint fidelity to model first.
+- Did not write any package code yet — gathering requirements first.
+- User rejected the structured questions to clarify first.
+
+## Prompt 2 — 2026-06-16
+
+> For the metric definition the way I'm thinking is that it's based on optimal lineup that you can set. But that itself is nebulous because "best" can be highest statistical output or most able to beat the weekly opponent.
+
+*Response notes:*
+- Identified the core fork: the **objective function** of the lineup optimization. "Best" lineup is undefined until we pick what we're maximizing.
+- Laid out three candidate objectives: (1) maximize category wins vs actual weekly opponent, (2) maximize category wins vs the field/average (all-play), (3) maximize raw statistical output.
+- Key insight surfaced: in a category H2H league, "points for" *are* category wins, which only exist relative to an opponent — so "metric definition" and "benchmark" are the same decision, not two. Also: raw-output maximization is ill-defined as a single scalar because FG%/FT% are attempt-weighted and TO is negative (no common unit across the 9 cats).
+- Recommended making the objective function pluggable, starting with opponent-aware category-win maximization.
+
+## Prompt 3 — 2026-06-16
+
+> I like this approach, let's flesh out A first. As for the subtlety, I want the eventual metric produced to be an evaluation of the difference between mine-optimal vs their-actual and mine-optimal vs their-optimal.
+
+*Response notes:*
+- Decision: flesh out Objective A (opponent-aware category-win maximization) first.
+- Target metric: Δ = M1 − M2, where M1 = catwins(mine-optimal, their-actual) and M2 = catwins(mine-optimal, their-optimal). Interpreted as the "opponent-mismanagement dividend" — category points banked purely because the opponent didn't optimize.
+- Flagged the infinite-regress trap: "their-optimal" optimizing against "my-optimal" (which optimizes against theirs) is a 2-player game needing Nash equilibrium. Proposed a tractable decoupled definition instead: each side best-responds to the OTHER'S ACTUAL lineup (one round of fictitious play), so every optimization has a fixed target and is well-posed.
+- Defined period-level primitives: feasible lineup -> aggregated 9-cat totals -> catwins() with TO inverted. Raised open items: tie-handling rule, whether "mine-optimal" is a single lineup reused in both M1/M2, and data visibility into opponent rosters via the Fantrax API.
+- Noted Nash-equilibrium "mutual ceiling" as a future advanced methodology, not the starting point.
+
+## Prompt 4 — 2026-06-16
+
+> I like the round of best response approach. One way to look at expected opponent statlines for determining optimization is season stat totals. At week X what are the stat totals at each category for each player and where do they rank? How many wins/losses/draws do they have in each category?
+
+*Response notes:*
+- User accepted the one-round best-response design.
+- User introduced the **ex-ante vs ex-post fork**: model the opponent (and/or self) via *expected* statlines from season-to-date totals, rather than the realized week-X output. Removes clairvoyance; the BR target becomes a projection, not a realized vector.
+- Surfaced that this choice applies symmetrically to one's own side too → three named variants: A-hindsight (both realized), A-expected (both season-to-date projections), A-hybrid (opponent expected, mine realized).
+- Proposed the foundational data artifact: a cumulative panel keyed by (through-week-X, player, category) → season total, per-game rate, and league rank; plus a (team, category) → W/L/D record. Reusable across all methodologies; also feeds z-score weighting (Objective B) and punt-prioritization.
+- Expected-statline construction sketch: per-player season-to-date per-game rate × games scheduled that week, aggregated over the opponent's projection-optimal feasible lineup. Requires per-game logs + weekly schedule from the API — extends the data-availability verification still owed from Prompt 3.
+- Open decisions: which symmetry variant to build first; how to define "expected starters" for the opponent.
+
+## Prompt 5 — 2026-06-16
+
+> For ties fantrax awards a tie.
+
+*Response notes:*
+- Tie rule resolved: category outcomes are a {win, loss, draw} triplet — a tie is recorded as a draw, NOT washed and NOT split to one side. For "points for" totals a draw counts as 0.5; we also retain the full W/L/D triplet since draws are first-class in this league.
+
+## Prompt 6 — 2026-06-16
+
+> We can use transaction logs for a season to build roster state on each day and then coordinate that with game data to ensure proper roster composition on a per-day basis
+
+*Response notes:*
+- Architecture: a **roster state machine** — base opening-day snapshot + ordered transaction deltas → daily roster membership; join with per-player per-day game logs (filtered to membership + eligibility) → per-day candidate pool → feed daily optimizer under slot/games-played caps.
+- Confirms **daily-lineup cadence**.
+- Raised load-bearing unknowns about the fork's API surface: (1) opening-roster/draft snapshot to seed deltas; (2) whether transaction logs include daily active/reserve decisions or only roster moves (add/drop/trade/IL) — determines if we reconstruct *actual* daily lineups or must pull realized category totals straight from stored matchup data; (3) games-played caps + active-slot limits + the "fantasy day" timezone rollover rule; (4) per-player per-day 9-cat box scores queryable historically.
+- Noted the user likely authored the fork (repo owner riders994 ≈ git user Rohan V), so they may know these answers directly. Verification of the fork is the converging next step.
+
+## Prompt 7 — 2026-06-16
+
+> I don't think we have an opening snapshot. We will need to work backwards from current state to beginning. Transaction log should span the full season with timestamps. It should cover trades, but not IL moves as thats not a transaction.
+
+*Response notes:*
+- No opening snapshot → flip to a **reverse state machine**: anchor on current roster (from API), undo transactions in reverse-chronological order (add→remove, drop→re-add, trade→swap back) to reconstruct each prior day.
+- Key consequence: opening-day roster AND draft data fall out for free as the terminal state of the reverse walk — we never need either explicitly. **The whole approach is valid iff the transaction log is complete back to season start (no truncation/pagination gaps).** That completeness is now the #1 risk.
+- IL moves absent from the log is fine: IL is a lineup-state attribute, not a membership change. An IL player is still "owned" (correct for the candidate pool) and, having no game that day, the game-log join means the optimizer never starts them anyway. So IL data is unnecessary for both the optimal (game-log join handles it) and the actual (pulled from stored matchup totals).
+- New risks raised: (a) time-varying position eligibility (players gain slot eligibility mid-season); (b) multi-player/pick trades must undo atomically, filtering non-player assets; (c) timestamp→fantasy-day bucketing needs the rollover timezone; (d) reconstruction invariants make great automated tests (no player double-owned; never drop an unowned player; terminal roster size == league size).
+- Cloned the stable fork to inventory real object schemas before scaffolding.
+
+### Findings — FantraxAPI stable fork inventory (2026-06-16)
+
+What the fork cleanly exposes (good):
+- **Team-level category totals per scoring period** — `Matchup` / `H2HRotisserie2.scoring_grid` gives `{category: {team_id: value}}`. This is `my_actual` / `opp_actual` and the per-category W/L/D + ranks the user asked about. (Fixtures are hockey G/A/PIM/Pts; NBA 9-cat is the same shape.)
+- **`league.transactions(count)`** → `getTransactionDetailsHistory`, rows grouped by `txSetId`, each with a parsed `datetime` and player `type` (incl. CLAIM/DROP/TRADE). Timestamps present. ⚠️ Only `maxResultsPerPage` — no page cursor in the fork; full-season completeness/pagination must be verified (may need to extend the fork).
+- **`league.team_roster(team_id, period_number)`** → historical *daily* roster by period number (`scoring_dates` maps period→date). ⚠️ Unverified whether past periods return the true historical active/reserve lineup or a current/default view. If it returns true history, the reverse state machine becomes a validation cross-check rather than the primary mechanism.
+- **`league.position_counts(team_id, period)`** → games-played-per-position with min/max → the games-played caps.
+- Schedule via `Game` objects (date, opponent, home/away); `scoring_dates`; `positions`; season start/end.
+
+The critical gap:
+- **No per-player per-day raw 9-category box scores.** `live_scores()` exposes only a single fantasy-points scalar per player per day (`statsMap[scorer]["object1"]`). The matchup grid is team-level, not per-player. The optimizer needs per-player-per-day category lines to recombine counterfactual lineups → **likely requires an external NBA box-score source (e.g. nba_api / stats.nba.com / basketball-reference) joined to Fantrax `scorerId` by name+team.** Caveat: only confirmed against the parser + a mocked fixture; the raw endpoint may carry more and needs a live check.
+- Nuance that updates build order: the **roster STATS view** (`view="STATS"`) likely carries per-player *season-to-date* category totals (fork only parses fantasy points from it). If so, **A-expected (season-to-date projections) may be buildable from Fantrax data alone**, while **A-hindsight (realized per-day) needs the external box-score feed + ID mapping.** → lean toward building A-expected first.
+
+Open items needing a LIVE session (user credentials + league_id): (1) does `team_roster(past_period)` return historical lineups; (2) transaction-history completeness to season start; (3) does the roster STATS raw response contain per-player season category totals; (4) is there ANY per-player per-day category split in a live `getLiveScoringStats` response.
+
+## Prompt 8 — 2026-06-16
+
+> Confirm A-expected first. Here's a league id to use for a league that has finished: wserh14rmbbpqtcg
+
+*Response notes:*
+- A-expected confirmed as the first methodology to build.
+- Finished-league ID for probing: `wserh14rmbbpqtcg`.
+- Fork auth model: cookie-based via Selenium login or cached `fantraxloggedin.cookie`; but `League(league_id)` and league-data reads appear to work unauthenticated for a valid id (bad id raises FantraxException). Member-only endpoints (trade block, pending trades) need login.
+- Wrote `/tmp/probe_fantrax.py` (read-only) to answer the four open items: league meta, 9-cat names + a finished matchup grid, transaction count/date-range/types, early-vs-late historical rosters + roster STATS column headers (per-player season-to-date category totals?), and a raw `getLiveScoringStats` statsMap entry (any per-player per-day category split?).
+
+### Probe results — live data from league `wserh14rmbbpqtcg` (2026-06-16)
+
+League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates, 24 matchup periods. Season 2025-10-21 → 2026-04-12. All 24 periods complete.
+
+**The 9 categories** (from matchup grid + per-player live scoring, in this order): FG%, 3PTM, FT%, PTS, REB, AST, ST(STL), BLK, TO. Matchup grid also carries W/L/T/Pts tallies per team per period.
+
+**WIN #1 — per-player per-day 9-cat lines ARE available from Fantrax** (`getLiveScoringStats` → `statsMap[scorer]["object2"]`, the fork drops this and keeps only `object1`=fpts). Each entry is `{scipId, sv, av}`; exactly 9 entries per player per day. Decoded scipId → category map (`3010#NNNN#-1`):
+  `1520=FG%, 1435=3PTM, 1550=FT%, 1390=PTS, 1400=REB, 1250=AST, 1410=STL, 1260=BLK, 1460=TO`.
+  → **A-hindsight does NOT need an external box-score feed for the counting cats.**
+
+**WIN #2 — historical daily rosters ARE directly queryable.** `team_roster(team_id, period_number)` returns the actual per-day roster membership (period 1 vs period 167 rosters differ correctly). → **reverse state machine demoted to a validation cross-check; not the primary mechanism.**
+
+**WIN #3 — A-expected engine confirmed Fantrax-only.** Roster STATS view returns per-player **season-to-date Per-Game rates + Games Played, as of that period** (period 1 shows 0 GP for everyone; period 167 shows accumulated rates). Columns: Age, Opponent(schedule), GP, FG%, 3PTM/G, FT%, PTS/G, REB/G, AST/G, STL/G, BLK/G, TO/G.
+
+**THE ONE REAL GAP — FG%/FT% denominators (makes/attempts).** Both endpoints expose the percentage only, never FGM/FGA/FTM/FTA. Percentages can't be correctly aggregated across a lineup without volume, and attempts are mathematically unrecoverable from the 9 cats (PTS, 3PTM, FG%, FT% give 1 equation, 2 unknowns). → exact FG%/FT% needs an **external makes/attempts source** (nba_api/bref, ID-mapped) OR a documented volume-weighted **approximation**. This is the only place external data may be needed.
+
+**Fork robustness gaps to fix when we build:**
+  - `Transaction` date parsing is positional (`cells[1]` assumed to be the date) and is WRONG for this league — `cells[1]` held `'1'`, `'40.00/0.00'`, etc.; must locate the date column via the header (like `Standings` does). First probe crashed on `strptime('')`.
+  - Transaction history pagination: response has a top-level `paginatedResultSet` the fork ignores; 542 rows / 349 txSets returned for this league. Completeness vs `paginatedResultSet` totals still to confirm (now lower priority since rosters are queryable directly).
+  - This league's transaction codes seen: CLAIM 278, DROP 263, LINEUP_CHANGE 1 — **no TRADE code observed** (league may have had none, or trades are encoded differently). To revisit if/when trades matter.
+
+## Prompt 9 — 2026-06-16
+
+> Do an approximation based on both points and position and 3 pointers to get a better estimate
+
+*Response notes:*
+- Chose the FG%/FT% volume estimator: use PTS + 3PTM + the two percentages + a position-based free-throw rate `r = FTA/FGA` to back out attempts. Position is the third equation that splits scoring into FGs vs FTs.
+- Formula: `FGA = (PTS − 3PTM) / (2·FG% + r·FT%)`; `FTA = r·FGA`; `FGM = FG%·FGA`; `FTM = FT%·FTA`. Lineups aggregate as Σmakes/Σattempts (no averaging-of-percentages error).
+- Position priors `r`: PG 0.20, SG 0.18, SF 0.22, PF 0.26, C 0.30 (tunable; multi-eligible → average). Edge cases: FG%=0-but-played → position per-game FGA prior; no FTs → FTA=0; DNP → 0/0 no contribution.
+- Implemented as a single `estimate_attempts()` seam so exact external makes/attempts can swap in later.
+
+## Prompt 10 — 2026-06-16
+
+> Installable package with pyproject.toml and src/ layout
+
+*Response notes:*
+- Scaffolded an installable `max_pf` package (hatchling build, `src/` layout, Python ≥3.11). Fork referenced as optional extra: `fantraxapi @ git+https://github.com/riders994/FantraxAPI@stable`.
+- Modules: `categories` (9-cat defs + scipId map + percentage/lower-is-better flags), `models` (PlayerLine/TeamLine aggregation via makes+attempts), `estimators` (the Prompt-9 attempts estimator + position priors), `metric` (catwins W/L/D triplet, points-for, M1/M2/Δ), `platforms/base` (abstract platform interface), `platforms/fantrax` (fork adapter: verified scipId decode + header-based transaction date fix; data-fetch methods stubbed), `optimize` + `projections` (documented stubs for the daily optimizer and A-expected builder).
+- Fully implemented + unit-tested the pure pieces (estimators, metric); platform fetch + optimizer left as next build step.
+
+## Prompt 11 — 2026-06-16
+
+> commit the scaffold first, then start
+
+*Response notes:*
+- Committed the scaffold to `primary` (`df18b9b`) — solo trunk; user directed a direct commit-and-continue flow.
+- Started build step #1 (A-expected projection builder):
+  - **Gotcha discovered:** Fantrax uses DIFFERENT stat ids for per-player *daily totals* vs *season per-game* rates. Only FG% (1520) and FT% (1550) share ids. Daily: PTS 1390, 3PTM 1435, REB 1400, AST 1250, STL 1410, BLK 1260, TO 1460. Per-game: PTS 1590, 3PTM 1620, REB 1600, AST 1470, STL 1610, BLK 1480, TO 1650, GP 1350. → moved all Fantrax scipId maps OUT of `categories.py` (now provider-agnostic) and INTO `platforms/fantrax.py` as `DAILY_STAT_SCIP` / `PERGAME_STAT_SCIP`.
+  - Roster STATS columns carry stable `scipId`/`key` per header cell, so the parser keys off ids, not English names.
+  - Implemented `decode_roster_stats()` (per-game lines, makes/attempts via the estimator), `season_to_date_rates(team, period)`, and `project_period_line(per_game, games)` scaler. Added `tests/test_projections.py`. **Full suite: 12 passing.**
+  - Live-validated against `wserh14rmbbpqtcg` period 83: 19 players parsed, realistic per-game lines, all FG%/FT% in [0,1].
+- Remaining for #1 (next): the **games-in-period schedule join** to turn per-game projections into per-matchup-period projections. This work is uncommitted.
+
+## Prompt 12 — 2026-06-16
+
+> Yes, finish and commit
+
+*Response notes:*
+- Finished build step #1 (A-expected projection builder), committed as its own unit.
+- **Schedule-join finding:** for a finished season, `SCHEDULE_FULL` collapses to the last game of the year (fork-documented) — useless for per-week game counts. Used the STATS view's **"Opponent" column** instead: a non-empty cell = the player's NBA team played that day, regardless of started/benched. Counted games by sweeping the matchup week's ~7 daily roster views (`players_with_game()`).
+- Implemented `FantraxPlatform.projected_roster_lines(team_id, period)`: season-to-date per-game rates as of the period's first day, scaled per player by games-in-period; `matchup_period_days()` maps a matchup period to its daily periods. Renamed the base interface method `projected_player_lines` → `projected_roster_lines(team_id, period)` (team-scoped is what the optimizer consumes). v1 simplification: players added mid-period are not projected.
+- Live-validated on `wserh14rmbbpqtcg` period 4: 7 daily periods, 14 players with games, implied 3–4 games/player, projected lines scale correctly, FG%/FT% in range. **Suite: 13 passing.**
+- Next up: build step #2/#3 — `roster_day` + games-played caps, then the daily best-response optimizer (`optimize.best_response`).
+
+## Prompt 13 — 2026-06-16
+
+> yes, work on the optimizer and with the same commit cadence
+
+*Response notes:*
+- Probed constraint structure (league `wserh14rmbbpqtcg`): **9 active slots** (types PG, SG, G, SF, PF, F, C, Flx; Fantrax pre-tags players with the combo positions they qualify for, so slot eligibility = slot name ∈ player positions, Flex = any). **No games-played caps** (all position min/max = None). → only binding constraint is the daily 9-slot capacity with eligibility; cross-day coupling is purely via the objective, so FG%/FT%/TO punting is the lever (no games budget).
+- Built `optimize.py` (pure): `Slot`/`Candidate` types, bipartite feasibility (`can_assign` augmenting-path matcher), greedy value construction, and `best_response(daily_candidates, slots, target)` = local search maximizing (points_for, then normalized category margin) — discovers efficiency/punting (e.g. benching a brick shooter to flip FG%, dropping a high-TO player). Games caps omitted (none in this league); clean seam to add later.
+- For A-expected, candidates are per-(player, day): the per-game rate line placed on each day the player has a game (so starting everyone sums to the projected period total). Added `FantraxPlatform.period_candidates(team_id, period)`; refactored `projected_roster_lines` to derive from it (single daily sweep).
+- Tests + live validation + commit per the standing cadence.
+- **Done + committed.** Optimizer tests (matching/capacity/punting) added → suite 17 passing. Live-validated on `wserh14rmbbpqtcg` period 4: 7 days, candidates/day = [10,8,12,3,12,9,8]; busy days correctly capped to the 9 slots (started/day = [9,8,9,3,9,9,8], all feasible); optimized line stayed competitive (8–1–0 vs a 0.88× stand-in target) while trimming volume to protect FG%/TO.
+- Next: build step #4 — `actual_team_line` + `matchup_opponent`, then wire `compute_delta` end-to-end (`mine_opt`/`their_opt` via one-round best-response) and validate Δ across the 24 real periods. Open follow-up: confirm the exact 9-slot multiplicities from league settings (currently a documented best guess in `DEFAULT_NBA_SLOTS`).
+
+## Prompt 14 — 2026-06-17
+
+> Yep, go ahead
+
+*Response notes:*
+- Built step #4 (Δ end-to-end), committed.
+- Fantrax adapter: `matchup_opponent` + `actual_team_line` from the matchup `scoring_grid` (cached `scoring_period_results`). `team_line_from_grid()` maps grid labels → category keys; FG%/FT% stored with a **unit denominator** (fga/fta=1) so `PlayerLine.fg_pct` returns the grid % exactly (terminal line, never aggregated).
+- New `engine.py` orchestration (kept out of `metric`/`optimize` to avoid the catwins import cycle): `period_delta()` runs the one-round best-response (`mine_opt` vs `opp_actual`, `their_opt` vs `my_actual`) → `compute_delta`; `season_deltas()` loops periods, skipping byes.
+- Tests: grid decode + engine wiring with a fake platform (bye → None). **Suite: 20 passing.**
+- Live-validated team `1whync…` over periods 3–6: every period **M1 ≥ actual** and **M1 ≥ M2** (so Δ ≥ 0), e.g. period 5 actual 1–8 vs M1 4–5; sum Δ = 4.0 (avg 1.0 cat/week). Pipeline behaves as designed.
+- **Objective A is now end-to-end functional.** Remaining/optional: confirm slot multiplicities; full 24-period + all-teams season run; then the other methodologies (A-expected vs A-hindsight comparison, Objective C, etc.).
+
+## Prompt 15 — 2026-06-17
+
+> Take #1
+
+*Response notes:*
+- Confirmed the active-slot config from the roster's Active-status rows (statusId "1"): **PG,SG,G,SF,PF,F,C ×1 + Flx ×2 = 9** — exactly matched the `DEFAULT_NBA_SLOTS` guess, so step-#4 numbers stand. (League settings JSON had no explicit roster spec; the status/posId rows are the source of truth.)
+- Made it general instead of hardcoded: added `slot_eligibility(short_name)` (parses single positions, combo letters G→PG/SG, F→SF/PF, slash combos like G/C, flex→any) and `FantraxPlatform.active_slots()` which derives slots+eligibility from the league for any roster config. Hardened eligibility to be inclusive (G slot accepts PG/SG, not just players tagged "G"). `DEFAULT_NBA_SLOTS` kept as a convenience/fallback built via `slot_eligibility`.
+- Tests for the eligibility parser + default layout → **suite 22 passing**. Live: `active_slots()` returns the confirmed 9-slot config; period 6 with derived slots reproduces the step-#4 result (actual 4-5, M1 6-3, M2 4-5, Δ 2.0) — no regression.
+- Recommended next: full-season report (all 24 periods × all teams) so the metric is visible league-wide.
+
+## Prompt 16 — 2026-06-17
+
+> I want a printed table + written file at same commit cadence
+
+*Response notes:*
+- Built `report.py` (TeamSeason aggregation + text/CSV/Markdown renderers) and a `python -m max_pf <league_id> [--periods] [--out]` CLI that prints a table and writes `<out>.csv` + `<out>.md`. Added per-`(team, period)` memoization of `period_candidates` (each is otherwise computed twice — once as a team, once as its opponent), plus `team_name` / `matchup_periods` helpers. Tests → **27 passing**.
+- Live subset run (periods 1–3, all 16 teams) printed the table and wrote both files. ✅ feature works.
+- **KEY FINDING:** several teams showed **M1 < Actual** (Eff% > 100%). Not a bug — it's the ex-ante/ex-post gap: `mine_opt` uses **A-expected projections** while `Actual` is **realized**, so a team that ran hot beats its projection-optimum. The "Left/Eff%" columns carried an A-hindsight meaning that's invalid for A-expected. Relabeled: dropped Left/Eff%, added **Luck = Actual − M1** (projection variance), and documented that a true lineup-management efficiency (realized-optimal ≥ realized-actual) needs the **A-hindsight** variant.
+- Recommend building **A-hindsight** next (realized per-day lines via `player_day_lines`) — it's the variant that makes the "max points for" ceiling/efficiency interpretation valid. Full 24-period × 16-team run is available via the CLI (slow, ~a few min); offered to run it in the background and commit the artifact.
+
+## Prompt 17 — 2026-06-17
+
+> Build A-hindsight first, then the full run
+
+*Response notes:*
+- Started A-hindsight; probed the live-scoring response to confirm the candidate source. **Hard data limit found:** `getLiveScoringStats(date)` carries realized per-player daily 9-cat lines only in the **ACTIVE** bucket (started players). `scorerMap` groups roster by status (incl. BENCH) but is metadata only — no stat line; `allPlayerStats` is a bool flag; `playerGameInfo` is a header. So **benched/reserve players' realized daily stats are NOT available from Fantrax.**
+- Consequence — the A-hindsight design forks:
+  - **Full A-hindsight** (the true "best lineup from your whole roster" ceiling) needs an **external NBA box-score source** (e.g. nba_api/stats.nba.com, public/no-auth) joined to Fantrax players by name(+team). Adds an optional dependency + an ID-mapping step.
+  - **Partial A-hindsight (Fantrax-only):** candidates = the players actually STARTED each day; optimizer can only *bench* them (never add a bench player). Valid ≥-actual ceiling but only captures the "sit a starter who hurt your FG%/FT%/TO" lever — not "you started the wrong guy."
+  - (Reconstruct-by-differencing cumulative roster STATS snapshots is possible but too rounding-noisy, esp. for FG%/FT%; rejected.)
+- Paused coding to get the user's call on the A-hindsight data source rather than ship a partial metric or silently add an external dependency.
+
+## Prompt 18 — 2026-06-17
+
+> Since we're moving to full box-score anyway, shouldn't we apply this methodology to the earlier processes?
+
+*Response notes:*
+- Agreed. Box scores become the **canonical player-performance + schedule source for BOTH methodologies**, not just hindsight. Wins: FG/FT attempts become **exact** (estimator → fallback only), A-expected season-to-date rates become exact, games-in-period comes from the real schedule (replaces the costly ~7-call/team/period Opponent sweep and fixes started-vs-scheduled). Fantrax stays source of truth for league structure (rosters, slots, matchups, **actual results**, transactions).
+- Reachability probe from this sandbox: **stats.nba.com → HTTP 000 (blocked)**, **basketball-reference → 200 (reachable)**, `nba_api` installable from PyPI (but runtime hits the blocked stats.nba.com). → implement/validate the box-score source against **bref here**; keep `nba_api` as a drop-in for the user's local runs.
+- Architecture: a pluggable **`StatSource`** seam (`FantraxStatSource` = current behavior/fallback; `BoxScoreStatSource` = exact, Stage 2). Optimizer/engine/report unchanged. Staged plan: (1) seam + refactor, (2) bref source + name→id mapping, (3) wire A-hindsight + A-expected-on-box-scores, then full run.
+
+## Prompt 19 — 2026-06-17
+
+> Start stage 1, bref primary with estimator fallback
+
+*Response notes:*
+- Stage 1 done + committed. Added `sources.py` (`StatSource` ABC: `expected_candidates`, and `hindsight_candidates` defaulting to a loud NotImplementedError). `FantraxPlatform` now holds an injectable `self.stat_source` (default `FantraxStatSource`), and `period_candidates(team, period, methodology="expected"|"hindsight")` routes through it (cache keyed by methodology). Renamed the raw Fantrax logic to `expected_period_candidates`.
+- Tests for the seam → **29 passing**. Live no-regression: period 6 reproduces actual 4-5 / M1 6-3 / M2 4-5 / Δ 2.0; Fantrax hindsight path raises clearly.
+- Next: Stage 2 — `BoxScoreStatSource` (bref): per-date box scores → (player, date) 9-cat w/ makes/attempts + schedule, name→`scorerId` mapping with a coverage report.
+
+## Prompt 20 — 2026-06-17
+
+> Proceed with Stage 2, cache under .cache/bref/
+
+*Response notes:*
+- Inspected live bref HTML: daily index → `/boxscores/<YYYYMMDD0TTT>.html` game pages; each has uncommented `box-<TEAM>-game-basic` tables; player rows carry `data-append-csv` (bref id) + `data-stat` cells `fg/fga/fg3/ft/fta/trb/ast/stl/blk/tov/pts` → **real makes/attempts**.
+- Built `box_bref.py` (optional extra `boxscores` = beautifulsoup4+requests): `BRefClient` (disk-cached under `.cache/bref/`, ~3.5s rate limit), pure parsers (`parse_day_index`, `parse_game_lines`, `normalize_name` w/ accent+suffix stripping), `day_lines`/`day_teams`, and `build_id_map` (Fantrax scorerId → bref id by normalized name, with `MappingResult` coverage/unmatched/ambiguous + a small extensible `ALIASES` map). Added `FantraxPlatform.all_players()`. `.cache/` git-ignored.
+- Tests (pure parsers, normalization, mapping incl. alias) → **34 passing**.
+- Live validation (4 dates of period 4): 372 bref players parsed, 316 Fantrax rostered. Parser exact (spot-check Kon Knueppel 16/6/1, 5/13 FG = .385). Mapping: 232 matched, **0 ambiguous**, 84 unmatched — classified: **61 simply didn't play in the 4-date window**, and 22/23 "surname-present" cases are coincidental collisions with *different* players (e.g. injured Dejounte Murray vs Kris/Jamal Murray). Only genuine name-form gaps were nicknames (Bub↔Carlton Carrington, Nic↔Nicolas Claxton) → handled via `ALIASES`. Matching precision is effectively ~100% for players present; raw 73% coverage is a date-window artifact.
+- Next: Stage 3 — `BoxScoreStatSource` wiring (realized daily candidates for A-hindsight; exact season-to-date projections + schedule for A-expected-on-box-scores), then the full run.
+
+## Prompt 21 — 2026-06-17
+
+> Proceed with Stage 3
+
+*Response notes:*
+- Refactored `StatSource` to a base where both methods default-raise (no abstractmethod), so a source implements only what it supports and the platform routes each methodology to a capable source.
+- `FantraxPlatform` now routes by methodology: A-expected → `stat_source` (Fantrax), A-hindsight → optional `hindsight_source` attached via `use_boxscores(client)` (raises clearly if absent). Added `roster_membership(team, daily_period)` → scorerId→(name, positions) from the *historical* roster (so dropped players still resolve).
+- Built `BoxScoreStatSource.hindsight_candidates`: per period day, Fantrax roster membership × bref realized day lines, matched per-day by normalized name (+ALIASES); unique-match only. Full-roster realized lines → optimizer result is a true ceiling.
+- Threaded `methodology` through `engine.period_delta`/`season_deltas`, `report`, and the CLI (`--methodology expected|hindsight`, which attaches a `BRefClient`). Scoped exact-A-expected-on-box-scores to a later stage (A-expected already works via Fantrax/estimator).
+- Tests (BoxScoreStatSource w/ fake platform+client, methodology threading) → **35 passing**. Live (period 4, team 1whync…): actual 1-8; A-hindsight M1 2-7 ≥ actual ✓ (1.0 left on table); A-expected and A-hindsight agreed here. The realized-optimal ≥ actual invariant (which A-expected couldn't guarantee) now holds.
+- Caveat: actuals come from the Fantrax grid while mine_opt uses bref lines, so M1 ≥ actual can be marginally noisy from source mismatch; held cleanly here.
+- Next (user-approved): the full run.
+
+## Prompt 22 — 2026-06-17
+
+> Wait until the first run is done, then do the second run. Let's limit concurrent calls to avoid problems
+
+*Response notes:*
+- Ran the **full-season A-expected report** (all 16 teams × 24 periods) as a tracked background task; committed `season_report.csv`/`.md`. Over the full season **M1 ≥ Actual for every team** (Luck all negative, −9.5…−66) — the expected-ceiling-vs-actual gap is sensible once weekly variance averages out, and accumulated lineup inefficiency shows. Δ (opponent-mismanagement dividend) ranges 7–73 (dbyun89 an outlier at 73, M2 only 38). Top of table: ZuPacalypse Now (Actual 150.5, M1 160).
+- Per the user, runs are **sequential, not concurrent**; the `BRefClient` is single-request at ~3.5s spacing with on-disk caching (resumable), so the A-hindsight crawl won't overlap the Fantrax run and stays polite.
+- Launching the full **A-hindsight** season run next → `season_report_hindsight.*` (kept separate so both methodologies can be compared).
+
+## Prompt 23 — 2026-06-17
+
+> I updated the fork for the fantrax repo at the same tag (@stable). please update where necessary
+
+*Response notes:*
+- Re-cloned `@stable` to a fresh dir (didn't touch the in-flight hindsight run's `/tmp/FantraxAPI_ref`, already loaded in memory) and diffed. Changes are **additive** (salary cap / draft picks / cap-hit penalties on `Roster`; `ScoringCategory` on `LivePlayer` — the fork now parses per-player per-day category stats natively, the `object2` we decoded by hand; `category_winners` on `H2HRotisserie2`) plus **bugfixes** (transaction history now paginates via `pageNumber`/`paginatedResultSet`; `scoring_dates` key building no longer string-munges `strftime`; `ScoringPeriod.complete/current` boundaries made inclusive/mutually exclusive).
+- **Verified our adapter is fully compatible:** the surface we use is unchanged — `H2HRotisserie2.scoring_grid/.home/.away`, `api.get_team_roster_info`, `scoring_period_results(playoffs=False)`, `League`/`positions`/`scoring_dates`/`scoring_periods`. Our raw-table parsing keys off `scipId`/header `key`, so the new salary/age columns don't shift anything. We don't use `get_transaction_history`/`.transactions()`/`Roster`/`get_live_scoring_stats` at runtime.
+- **Only change needed:** removed the now-obsolete `transaction_date_column` workaround (dead code; upstream fixed transaction pagination + parsing). Suite still **35 passing**. `pyproject` pin is `@stable` so installs auto-get the update — no pin change.
+- Deferred (no-concurrency): live re-validation against the new fork once the hindsight run finishes; the in-flight hindsight artifact uses the prior fork (date mapping validated correct for this league, so unaffected in practice).
+
+## Prompt 24 — 2026-06-17
+
+> Adopt this convention for packaging: all indicated version numbers should be >= for greater compatibility
+
+*Response notes:*
+- Audited `pyproject.toml`: already compliant — `requires-python>=3.11`, `requests>=2.28`, `beautifulsoup4>=4.12`, `pytest>=7` all use `>=`; no `==`/`~=`/upper caps anywhere. Non-version specs are exempt (the `fantrax` extra is a git `@stable` tag pin; `hatchling` build req is intentionally unversioned).
+- Codified the convention as a comment in `pyproject.toml` and saved it to memory ([[packaging-version-convention]]) so future dependency additions follow it. No functional change.
+
+### A-hindsight full-run completion + methodology comparison (closes Prompt 22, 2026-06-17)
+
+- The full A-hindsight season run (16 teams × 24 periods, realized basketball-reference box scores) finished and was committed as `season_report_hindsight.*` (commit `4a13c7a`). Both methodologies now have committed full-season artifacts; this note records the side-by-side comparison the commit message promised.
+- **Invariant holds in both:** M1 ≥ Actual for every team (Luck ≤ 0 everywhere). The realized-optimal-≥-actual ceiling that A-expected could *not* guarantee is clean under A-hindsight.
+- **M1 (realized ceiling):** A-expected M1 > A-hindsight M1 for **15 of 16** teams — projections are optimistic (smooth per-game rates, no DNPs/availability/variance, so the optimizer exploits idealized lines). The **one exception is Trusting the Process** (expected 124.0 < hindsight 129.5): its rostered players out-performed their season-to-date rates in the games actually played, so the realized ceiling exceeds the projected one.
+- **Luck (Actual − M1):** magnitude shrinks under hindsight (band −6.5…−60 vs expected −9.5…−66; e.g. Testicular −56 → −29, Nico's −66 → −60, ZuPac −9.5 → −8). This is the core payoff of A-hindsight: with projection variance removed, the Actual−M1 gap is **genuine lineup mismanagement (points left on the table)**, not forecast noise. A-expected's "Luck" conflated the two.
+- **Δ (opponent-mismanagement dividend):** the expected spread (7–73) **compresses to a tight, credible 11–35** under hindsight. Projection-driven extremes regress: the dbyun89 expected outlier (Δ=73, driven by an implausibly low expected M2=38) corrects to Δ=35 (M2=71), confirming it was a projection artifact; other inflated dividends compress similarly (Good Night Luka 52.5→30.5, Ant-ticpating 44→15, Kevin's 43→27.5). Conversely the suspiciously-low Δ for elite teams rises (ZuPac 9→16.5, johqui 7→27) as their opponents' realized-optimal M2 lands below the projection. Net: A-hindsight is the trustworthy read for both the efficiency ceiling (Luck) and the dividend (Δ).
+- **Still deferred (no-concurrency, needs a live session):** re-validate the adapter against the updated `@stable` fork end-to-end (the deferred item from Prompt 23); the committed hindsight artifact was generated on the prior fork, whose date mapping was validated correct for this league, so the numbers are unaffected.
+
+## Prompt 25 — 2026-06-17
+
+> Make sure all findings are properly documented. Then finish up the fork re-validation. You shouldn't need credentials beyond the ID as the league is public.
+
+*Response notes:*
+- **Documentation:** the findings previously lived only in this chronological log. Wrote a proper `README.md` consolidating the metric (M1/M2/Δ/Luck, draw=0.5), the two methodologies (A-expected vs A-hindsight), data sources (Fantrax + basketball-reference behind the `StatSource` seam), install/CLI/programmatic usage, the full-season findings + comparison, and the roadmap. The README now links the report artifacts and the prompt log.
+- **Fork re-validation — DONE, clean.** Fresh venv, `pip install -e ".[fantrax,boxscores,dev]"` against the updated `@stable` fork installed without error; **35/35 tests pass**. Public league `wserh14rmbbpqtcg` reads through the fork with the **league id only** (no credentials), as expected: 16 teams, 24 periods, 9-slot config matches `DEFAULT_NBA_SLOTS`.
+- **End-to-end results are bit-identical to the pre-update fork** (live, team `1whyncpkmbbpqtde` "Ant-ticpating wins"):
+  - A-expected period 6: actual 4-5, M1 6-3, M2 4-5, **Δ 2.0** — matches Prompt 15 exactly.
+  - A-expected periods 3–6: per-period Δ = 1.0/0.0/1.0/2.0, **sum 4.0** — matches Prompt 14 (incl. P5 actual 1-8 vs M1 4-5).
+  - A-hindsight period 4: actual 1-8, M1 2-7 (**≥ actual ✓**, 1.0 left on table), M2 2-7, Δ 0.0 — matches Prompt 21.
+  - → confirms the additive `@stable` changes (salary cap, `ScoringCategory`, `category_winners`, transaction pagination/parsing fixes) shifted nothing in our pipeline; the committed report artifacts stand. Note: raw `urllib` to fantrax.com 403s (UA bot-block), but the fork's `requests` session reads fine.
+- (Sandbox note: stats.nba.com remains blocked here; basketball-reference reachable — A-hindsight ran against bref as designed.)
+
+## Prompt 26 — 2026-06-17
+
+> Right, let's finish #1 first to get on to the current data source.
+
+*Response notes:*
+- Built roadmap item #1: **exact A-expected on box scores**, replacing the FG/FT attempt estimator as the metric's data source.
+- `BoxScoreStatSource` now supplies **both** methodologies. New `expected_candidates`: accumulate each rostered player's realized bref lines from season start to the period's first day (Σmakes/Σattempts ÷ games → exact per-game rate, no estimator), then place that rate on each in-period day the player's NBA team plays (real schedule via `day_teams`, replacing the ~7-call Fantrax "Opponent" sweep). Added `projections.per_game_line` (inverse of `project_period_line`), a shared module-level `_match_membership` (unique-name match, used by both methods), and a per-date `_day_cache` memo on the source (parsed day lines reused across teams/periods/accumulation on top of the on-disk cache).
+- Routing: `FantraxPlatform` gained `expected_source` (defaults to the Fantrax estimator source); `use_boxscores(client)` now points **both** `expected_source` and `hindsight_source` at one `BoxScoreStatSource`. The CLI attaches box scores unconditionally, so both methodologies are box-score-backed by default; the Fantrax estimator remains the no-extra-dependency fallback (used when box scores aren't attached). Optimizer/engine/report unchanged.
+- Tests: added an `expected_candidates` unit test (season-to-date rate from two prior games, alias match, schedule gating, unplayed player dropped) → **36 passing**.
+- **Live validation** (team `1whyncpkmbbpqtde`, warm `.cache/bref/`): routing confirmed (`expected_source is hindsight_source` after `use_boxscores`). Exact vs estimator A-expected reproduce the **identical category-win metric** across early/mid/late periods — P4 M1 2-7 Δ0.0, P12 M1 8-1 Δ6.0, P20 M1 4-5 Δ2.0 (both paths). The exact candidate pool is leaner (P4 11 vs 18 players: only players with a prior game + a real team game that day) but still fills all 9 slots optimally, so M1/M2/Δ are unchanged — confirming the estimator was a sound approximation now superseded by exact data.
+- v1 simplification retained: players with no prior game (e.g. a not-yet-debuted rookie) aren't projected, same as mid-period adds.
+- **Pending (next full run):** regenerate `season_report.*` (A-expected) on the box-score path so the committed artifact matches the new default; the metric is expected to be ~unchanged given the per-period agreement above. Then on to roadmap #2 (Objective B / z-score punt-aware weighting).
+
+## Prompt 27 — 2026-06-17
+
+> just move on
+
+*Response notes:*
+- Declined the A-expected artifact regeneration; moved on to roadmap #2 (Objective B). Building it in stages (seam first, as with Objective A / the StatSource).
+- **Stage B1 — z-score foundation + pluggable optimizer objective.** Both are needed regardless of how Objective B ultimately consumes z-scores, and the optimizer change is a no-behaviour-change refactor for Objective A.
+  - New `zscores.py`: `build_model(population)` fits per-category mean/std over a population of *per-game* lines; `ZScoreModel.zscores(line)`/`.value(line)` standardize a player and sum to one scalar. Counting cats standardized directly (TO inverted); **ratio cats (FG%/FT%) standardized as volume-weighted impact** `(pct − league_pct)·attempts`, the correct way to value ratios for a Σmakes/Σattempts lineup. Population (not sample) std — the population *is* the valuation universe.
+  - `optimize.py`: the objective is now a pluggable `objective: Objective` arg on `best_response` (default `objective_catwins`, the renamed Objective-A `_score`). Construction heuristic + matcher unchanged. Zero behaviour change for Objective A.
+  - Tests: z-score centring/TO-inversion/volume-weighting/empty-population + a pluggable-objective override → **41 passing**.
+  - **Live sanity check** (period 12, 279-player population): top total-z values are SGA (+12.1), Kawhi (+11.9), Maxey (+11.0), Wembanyama (+10.3) — all genuine studs; bottom are 0p/0r/0a end-of-bench/DNP players. Rankings are sensible.
+- **Stage B2 — design fork settled by the user:** chose **(b) standalone max-total-z** (opponent-independent "best team by the numbers"; catwins becomes a readout, not the objective) with a **league-wide rostered** population (one model per period, shared by both sides).
+- **Stage B2 build (done):**
+  - Generalized the optimizer objective seam to take the *started selection* (`list[list[Candidate]]`), not just the aggregate line, so value objectives score players at **per-game scale** (a realized/projected candidate line ≈ one game, matching the per-game z-model — feeding the period aggregate would mismatch scales). `objective_catwins` now aggregates internally (unchanged behaviour). Added `make_total_z_objective(model)`: sums `model.value(c.line)` over started candidates, ignores the target. Since total-z is separable across players/days, this picks the highest-value feasible lineup each day (no opponent coupling).
+  - Engine: `period_delta`/`season_deltas` gained `objective="catwins"|"zscore"`. For `zscore` it builds the objective from `platform.zscore_model(period)` and runs both sides against it. `FantraxPlatform.league_per_game_population(period)` dedups per-game rates across all teams; `zscore_model(period)` builds + memoizes the model per period. Threaded `--objective` through report + CLI.
+  - Tests: engine zscore-objective routing (max-value lineup, opponent-independent) + the generalized objective signature → **42 passing**.
+  - **Live (team `1whyncpkmbbpqtde`, expected methodology):** in every period **Objective A's category-win M1 ≥ Objective B's** — P12 A 8-1 vs B 7-2 (Δ 6.0 vs 5.0), P20 A 4-5 vs B 3-6 (Δ 2.0 vs 0.0), P4 identical (2-7). Exactly as designed: A tailors the lineup to beat the specific opponent (more category wins on the readout), B plays the opponent-independent value-max lineup. Routing, per-game valuation, and opponent-independence all confirmed.
+- **Next:** optional full-season Objective B run for a league-wide A-vs-B comparison artifact; then roadmap #3 (Objective C) or the Nash mutual-ceiling capstone.
+
+## Prompt 28 — 2026-06-17
+
+> Finish objective C so we can do an A vs B vs C comparison in one shot.
+
+*Response notes:*
+- **Objective C — raw statistical output.** Defined as the scarcity-blind counterpart to B: same league-wide population/model, but value = `ZScoreModel.raw_value` = Σ per-category raw quantities (counting stats with TO subtracted, FG%/FT% as volume impact) *without* dividing by std — so the sum is dominated by high-volume cats (PTS/REB) and the lineup chases output rather than rarity. Centring by mean omitted (shifts every player equally; never changes the argmax). Added `make_total_raw_objective`, factored with B's via `_value_objective`. Wired `raw` through engine/report/CLI (`--objective raw`).
+- **Finding while validating — value objectives were fielding a *partial* lineup.** "Maximize total z-value" literally benches every below-replacement (negative-z) player, so Objective B started only 15 of 47 feasible player-days (37/52 candidates had negative z). That isn't lineup-setting — in counting-cat H2H you always field a full team. **Fix:** `_value_objective` now returns `(games_started, total_value)` — fill the lineup first, then maximize value among full lineups. (Matches the user's "best team *by the numbers*" intent. The literal bench-negatives variant is a one-line change if ever wanted.) Objective A (catwins) already punted deliberately and is unchanged.
+- **A vs B vs C comparison** (team `1whyncpkmbbpqtde`, periods 4/8/12/16/20): with full lineups all three often coincide, because the objective only bites when a day has **more startable players than slots** (a choice to make); on light slates everyone with a game starts regardless. Scanning all 16 teams in period 8 surfaced the divergence: **A ≥ B and A ≥ C always** (A optimizes catwins directly); e.g. Minotts A 8-1 vs B/C 7-2, Streakbreaker A 5-4 vs B/C 4-5 — A tailors the overflow-day picks to beat that specific opponent and banks one more category than the opponent-blind objectives. **B and C coincided** in these cases: among the surplus players, scarcity-value and raw-output rank the (star) candidates the same way. Net: the methodology distinction is real but only exercised by bench-overflow days, and is largest for A (opponent-aware) vs the opponent-independent B/C.
+- Tests: `raw_value` (volume dominance, TO penalty) + engine `raw` routing → **44 passing**.
+- **All three objectives (A/B/C) now selectable in one run via `--objective`.** Next: optional full-season A/B/C artifact; then the Nash mutual-ceiling capstone.
+
+## Prompt 29 — 2026-06-18
+
+> Yes, we want to bench negatives when possible. Reducing TOs or juking %age categories can make or break a week.
+
+*Response notes:*
+- **Reversed the Prompt-28 count-first decision per the user: value objectives now BENCH NEGATIVES.** `_value_objective` returns the plain `Σ value` again (dropped the `(games_started, …)` lexicographic wrapper). Rationale the user supplied and the model already supports: z-value prices in FG%/FT% **volume-weighted impact** and **subtracts TO**, so a below-replacement player has negative value and benching him directly protects the ratio cats and turnovers — which can swing a weekly matchup. So the value lineup is the set of net-positive players, not a full slate.
+- **Validated the lever** (team `1whyncpkmbbpqtde`, period 12): Objective B started 15 player-days (vs A/C's 47) and in doing so posted **FG% .504 / FT% .781 / TO 23**, versus the full-volume A/C lineups at **.488 / .738 / TO 53** — benching the marginal players juked both percentage categories up and roughly halved turnovers, at the cost of counting volume (PTS 197 vs 430). catwins readout M1: A 8, C 8, **B 7** (B sacrifices one counting category for the efficiency sweep). Exactly the intended behaviour.
+- C benches far less than B because raw value is almost always positive (only a player with more TO than production goes negative); here C == A (full volume). The A/B/C distinction is therefore: A wins the most categories vs the *specific* opponent; B sits marginal players to dominate ratios/TO; C chases raw output.
+- Docstrings (optimize `_value_objective` / `make_total_*` / engine) and README updated to the bench-negatives semantics. **44 passing.**
+
+## Prompt 30 — 2026-06-18
+
+> start with stage 1 (iterated best-response)
+
+*Response notes:*
+- Built the **Nash mutual-ceiling capstone, stage 1**: `engine.nash_ceiling` runs simultaneous **iterated best response** (both sides best-respond by catwins to the other's *current* lineup, seeded from actuals) until a fixed point — a pure-strategy Nash equilibrium where each lineup best-responds to the other — or until a state repeats (deterministic **cycle** = no pure equilibrium) or the round cap. Returns `NashResult(converged, rounds, mine, theirs, m3)`, where **M3 = catwins(mine\*, theirs\*)** is the both-sides-optimal split (the mutual ceiling). Added `season_nash`. Reuses `best_response`; no new dependency. Always catwins (the game's payoff) — Objectives B/C are opponent-independent and have no equilibrium.
+- Tests: convergence (one dominant candidate per side → immediate mutual best response), **cycle detection** (a hand-built 4-cycle of cyclic dominance A>X>B>Y>A over pts/reb/ast → best responses chase forever), bye → None. **46 passing.**
+- **Live** (team `1whyncpkmbbpqtde`, expected): converged to a pure Nash equilibrium in **17/21 periods** (2–3 rounds typically); periods 6/7/14/15 **cycled** (detected at ~7–8 rounds; M3 there is just the terminal state, not a true ceiling — needs stage 2). The new decomposition `M1 − M3` isolates the dividend earned specifically because the opponent was *beatable* vs a perfectly-playing one: e.g. P12 M1 8 vs M3 2 (+6), P9 7 vs 4 (+3). Often M3 == M2 at convergence. Caveat reconfirmed: `opp_actual` is realized (Fantrax grid) while the equilibrium uses projected candidate lines, so M1 can sit *below* M3 when the opponent's realized week beat their projection (e.g. P1 M1 1.0 < M3 4.5) — the same ex-ante/ex-post source mismatch noted earlier.
+- **Stage 2 (deferred):** mixed-strategy / minimax *value* for the cycling periods via a double-oracle LP (adds an LP dependency + payoff-matrix builder). Stage 1 stands alone for the ~80% of periods with a pure equilibrium.
+
+## Prompt 31 — 2026-06-18
+
+> Now we make the tooling aspect. When running from within a python program, someone should be able to feed in a login dict which names the platform and any necessary details (for example fantrax and the league_id). by default it should spit out a report of season to date. there should be options to run a single week or a selection of weeks. if running this program from command line, user should specify a json or yaml file to be loaded as the login dict.
+
+*Response notes:*
+- Built the top-level entry point in new `app.py`:
+  - **`run(login, *, weeks=None, methodology="expected", objective="catwins", boxscores=True, cache_dir=None)`** → season report rows (`list[TeamSeason]`). Default `weeks=None` = season to date; `weeks` accepts an int (one week), list/range, or spec string (`"5"`, `"1-6"`, `"1,2,5"`) via `parse_weeks`.
+  - **Platform registry**: `PLATFORMS` name→builder + `register_platform`/`build_platform(login)`. `login["platform"]` selects the adapter; `"fantrax"` builder takes `league_id` (FantraxPlatform import is lazy, so `import max_pf` doesn't need the fantrax extra). Unknown/empty platform and missing `league_id` raise clear `ValueError`s.
+  - **`load_login(path)`** loads a JSON or YAML mapping (dispatch by extension; YAML lazily imports PyYAML with a clear error if the `yaml` extra is absent; non-mapping rejected).
+  - `run` attaches the box-score source by default (both methodologies exact) when the platform supports `use_boxscores`; `boxscores=False` falls back to the Fantrax estimator.
+- **CLI rewritten**: `python -m max_pf <login-file>` (positional is now a JSON/YAML path, not a league id). Flags `--weeks` (replaces `--periods`), `--methodology`, `--objective`, `--out`, `--no-boxscores`. Loads the dict via `load_login`, calls `run`, prints the table, writes `<out>.csv`/`.md`.
+- Added `active_slots` to the `LeaguePlatform` ABC (the entry point relies on it); exported `run`/`build_platform`/`load_login`/`parse_weeks`/`TeamSeason`/`render_*` from the package top level. Added the optional `yaml` extra (PyYAML); `parse_periods` moved out of `__main__` into `parse_weeks` (test in `test_report` retired; covered by `test_app`).
+- Tests: new `test_app.py` (weeks parsing, registry dispatch + errors, fantrax-needs-league_id, JSON/YAML load + bad-type rejection, end-to-end `run` with a registered fake platform). **52 passing.**
+- **Live smoke tests**: CLI `python -m max_pf /tmp/league.json --weeks 6 --no-boxscores` printed the 16-team week-6 table and wrote the files; programmatic `max_pf.run({"platform":"fantrax","league_id":"wserh14rmbbpqtcg"}, weeks="5,6", boxscores=False)` returned 16 rows scoped to 2 GP. Both paths work end-to-end.
+
+## Prompt 32 — 2026-06-18
+
+> [PR request, then:] In another repo we vendored the repo by keeping a local version within repo files. I'm currently trying to get maintainer access before uploading my own version. Vendor the repo so we can push this problem off until later. [+ "I updated the stable fork again, please pull and reanalyze."]
+
+*Response notes:*
+- **Context:** opened the PR (`initial_dev` → `primary`) by pushing the branch; no `gh`/token in this env, so handed over the compare URL + a ready-to-paste title/body. Flagged the PyPI blocker: the `fantrax` extra's `git+https` **direct reference** is rejected by PyPI on upload.
+- **Fix chosen by the user: vendor the fork** (defer publishing their own `fantraxapi` until they have maintainer access).
+- Re-pulled `@stable` (`--force-reinstall --no-cache-dir`) per the user's update. Re-analysis of the fresh fork: pinned commit `4f98fa66b2c28505de3f0fa4b274d14feccc7577`, MIT, pure-Python, runtime deps = `requests` (+ stdlib `decimal`); `setuptools` is metadata-only (never imported). **All imports are package-relative now** (the previous absolute `from fantraxapi....` lines in `api.py` are gone), so vendoring needs **no code edits**.
+- **Vendored** the source unmodified into `src/max_pf/_vendor/fantraxapi/` (+ its `LICENSE`), added `_vendor/__init__.py` and `_vendor/NOTICE.md` (source, upstream, commit, license, refresh instructions). Adapter now imports `from .._vendor.fantraxapi import League, api` (dropped the optional-extra ImportError guard — it always ships).
+- **pyproject:** removed the `fantrax` git extra and the `[tool.hatch.metadata] allow-direct-references` it required; `requests` stays core (vendored adapter + bref both use it); `boxscores` trimmed to just beautifulsoup4.
+- **Validated self-containment:** uninstalled the top-level `fantraxapi`, then `from max_pf._vendor.fantraxapi import League` resolves, **52 tests pass**, and a live fetch of league `wserh14rmbbpqtcg` works (16 teams / 24 periods / 9 slots). Built the wheel: 19 vendored files + LICENSE + NOTICE shipped, and **`Requires-Dist` carries no `@ url` direct reference** → PyPI-clean.
+- README updated (install drops the `[fantrax]` extra; data-sources notes the vendoring). To refresh the fork later: re-copy at the new commit per `_vendor/NOTICE.md`. Once the user has their own `fantraxapi` on PyPI, the vendor dir can be swapped back for a normal versioned dependency.
+
+## Prompt 33 — 2026-06-18
+
+> Add my email as r.vahalia@gmail.com, get rid of the stale artifacts. We'll fix that up when we do the next round of release work on the open roadmap items. Make sure open roadmap items are recorded as todos. After all of that, do everything except make the git tag and prep this branch for merge.
+
+*Response notes:*
+- **v1.0.0 release prep** (everything except the git tag, which the user makes after merge):
+  - `pyproject`: version `0.0.1` → **`1.0.0`**; author email `r.vahalia@gmail.com`; added 9 trove `classifiers` (Production/Stable, MIT, Python 3.11/3.12, topics), `[project.urls]` (Homepage/Repository/Issues/Changelog), and a `[project.scripts]` console entry point **`max-pf = max_pf.__main__:main`** (so `max-pf league.json` works, not just `python -m max_pf`).
+  - **Removed the stale `season_report.*` artifacts** (4 files) — generated on the old estimator path, pre-dating exact A-expected on box scores. Regeneration deferred to the next round (recorded as a todo).
+  - **`CHANGELOG.md`** (Keep a Changelog) with the 1.0.0 entry; **`TODO.md`** recording the open roadmap items as checkboxes: artifact regeneration, Nash stage 2 (mixed/minimax LP), M3 in the report, replace vendored fantraxapi with a PyPI dep, CI, optional vendor pruning, more platforms.
+  - README: Findings no longer links the deleted artifacts (points to TODO.md + the CLI); Roadmap trimmed (dropped the stale artifact note + a duplicate Nash bullet) and points open work to TODO.md.
+  - **Verified the wheel**: `max_pf-1.0.0`, author-email set, 9 classifiers, 4 Project-URLs, `max-pf` console_scripts entry point, 19 vendored files shipped, **no `@ url` in Requires-Dist** (PyPI-clean). 52 tests pass.
+- Branch prepped for merge (committed + pushed to `initial_dev`); **git tag `v1.0.0` intentionally NOT created** — the user will tag after merging to `primary` (the CHANGELOG/release URL reference `v1.0.0`).
