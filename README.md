@@ -133,7 +133,9 @@ projection useful before results are in.
   real makes/attempts and the real schedule. (The committed `season_report.*`
   artifact was generated on the earlier estimator path; regenerating it on box
   scores is the next full run.)
-- Objective B (z-score / punt-aware weighting) and Objective C.
+- Objective B (z-score / punt-aware weighting): foundation done — a `zscores`
+  module (volume-weighted ratio impact, TO inverted) plus a pluggable optimizer
+  objective. Next: wire a z-score objective through the engine. Then Objective C.
 - Nash "mutual ceiling" (two-player equilibrium) as an advanced methodology.
 
 See [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.

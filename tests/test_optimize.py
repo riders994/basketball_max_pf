@@ -1,5 +1,5 @@
 from max_pf.models import PlayerLine
-from max_pf.optimize import Candidate, Slot, best_response, can_assign
+from max_pf.optimize import Candidate, Slot, best_response, can_assign, objective_catwins
 
 
 def cand(pid, positions, **kw):
@@ -50,3 +50,17 @@ def test_local_search_punts_to_flip_fg_pct():
     assert res.line.fg_pct > target.fg_pct          # FG% now won
     # A alone wins the 6 counting cats + FG%, with FT% and TO as draws (0/0).
     assert res.result.wins == 7
+
+
+def test_pluggable_objective_can_override_default():
+    # A custom objective that maximizes raw points (ignoring the target) starts
+    # the high scorer; the default catwins objective is the explicit default.
+    a = cand("A", ("PG",), pts=40)
+    b = cand("B", ("SG",), pts=5)
+    pts_only = lambda line, target: line.pts
+    res = best_response([[a, b]], [Slot("Flx")], target=PlayerLine(), objective=pts_only)
+    assert res.started[0] == ["A"]
+    # Default objective path still works unchanged.
+    res_default = best_response([[a, b]], [Slot("Flx")], target=PlayerLine(),
+                                objective=objective_catwins)
+    assert res_default.started[0] == ["A"]

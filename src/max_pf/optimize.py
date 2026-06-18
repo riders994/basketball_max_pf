@@ -1,10 +1,11 @@
-"""Daily lineup optimizer (Objective A best-response).
+"""Daily lineup optimizer (best-response).
 
 Given a team's per-day candidate pool over a matchup period, choose which players
 to start each day -- subject to the daily active-slot capacity and position
-eligibility -- so the aggregated period line wins the most categories against a
-fixed opponent target. This is the engine behind ``mine_opt`` / ``their_opt`` in
-:mod:`max_pf.metric`.
+eligibility -- so the aggregated period line maximizes a pluggable ``objective``
+against a fixed opponent target. The default objective is Objective A (category
+wins, opponent-aware); Objective B plugs in a z-score-weighted variant. This is
+the engine behind ``mine_opt`` / ``their_opt`` in :mod:`max_pf.metric`.
 
 Why this isn't a greedy per-day pick:
 - FG%/FT% are ratios, so adding a high-volume inefficient game can *lower* a
@@ -22,10 +23,16 @@ future extension (the construction/search would carry a remaining-games state).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
 
 from .categories import CATEGORIES
 from .metric import CategoryResult, catwins
 from .models import PlayerLine, aggregate
+
+# An objective scores a candidate aggregate line against the opponent target,
+# returning any orderable value (higher = better). Objective A is the default
+# (:func:`objective_catwins`); Objective B plugs in a z-score-weighted variant.
+Objective = Callable[[PlayerLine, PlayerLine], object]
 
 
 @dataclass(frozen=True)
@@ -94,8 +101,8 @@ def _construct_day(candidates: list[Candidate], slots: list[Slot]) -> list[Candi
     return chosen
 
 
-def _score(line: PlayerLine, target: PlayerLine) -> tuple[float, float]:
-    """Objective: maximize category points, then total normalized margin.
+def objective_catwins(line: PlayerLine, target: PlayerLine) -> tuple[float, float]:
+    """Objective A: maximize category points, then total normalized margin.
 
     The margin term gives the local search a gradient toward flipping near-miss
     categories even when the category-win count is unchanged.
@@ -120,6 +127,7 @@ def best_response(
     slots: list[Slot],
     target: PlayerLine,
     max_passes: int = 50,
+    objective: Objective = objective_catwins,
 ) -> OptimizerResult:
     """Return the lineup over the period that best beats ``target``.
 
@@ -128,9 +136,11 @@ def best_response(
         slots: active lineup slots (capacity = ``len(slots)`` per day).
         target: opponent line to maximize category wins against.
         max_passes: local-search iteration cap.
+        objective: scoring function the search maximizes (default Objective A,
+            opponent-aware category wins; Objective B passes a z-score variant).
     """
     started = [_construct_day(day, slots) for day in daily_candidates]
-    best = _score(_aggregate_started(started), target)
+    best = objective(_aggregate_started(started), target)
 
     for _ in range(max_passes):
         best_move = None  # (day_index, new_day_selection, score)
@@ -156,7 +166,7 @@ def best_response(
 
             for cand_day in neighbors:
                 trial = started[:d] + [cand_day] + started[d + 1:]
-                score = _score(_aggregate_started(trial), target)
+                score = objective(_aggregate_started(trial), target)
                 if score > best and (best_move is None or score > best_move[2]):
                     best_move = (d, cand_day, score)
 

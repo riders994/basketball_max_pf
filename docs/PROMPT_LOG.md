@@ -329,3 +329,16 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - **Live validation** (team `1whyncpkmbbpqtde`, warm `.cache/bref/`): routing confirmed (`expected_source is hindsight_source` after `use_boxscores`). Exact vs estimator A-expected reproduce the **identical category-win metric** across early/mid/late periods — P4 M1 2-7 Δ0.0, P12 M1 8-1 Δ6.0, P20 M1 4-5 Δ2.0 (both paths). The exact candidate pool is leaner (P4 11 vs 18 players: only players with a prior game + a real team game that day) but still fills all 9 slots optimally, so M1/M2/Δ are unchanged — confirming the estimator was a sound approximation now superseded by exact data.
 - v1 simplification retained: players with no prior game (e.g. a not-yet-debuted rookie) aren't projected, same as mid-period adds.
 - **Pending (next full run):** regenerate `season_report.*` (A-expected) on the box-score path so the committed artifact matches the new default; the metric is expected to be ~unchanged given the per-period agreement above. Then on to roadmap #2 (Objective B / z-score punt-aware weighting).
+
+## Prompt 27 — 2026-06-17
+
+> just move on
+
+*Response notes:*
+- Declined the A-expected artifact regeneration; moved on to roadmap #2 (Objective B). Building it in stages (seam first, as with Objective A / the StatSource).
+- **Stage B1 — z-score foundation + pluggable optimizer objective.** Both are needed regardless of how Objective B ultimately consumes z-scores, and the optimizer change is a no-behaviour-change refactor for Objective A.
+  - New `zscores.py`: `build_model(population)` fits per-category mean/std over a population of *per-game* lines; `ZScoreModel.zscores(line)`/`.value(line)` standardize a player and sum to one scalar. Counting cats standardized directly (TO inverted); **ratio cats (FG%/FT%) standardized as volume-weighted impact** `(pct − league_pct)·attempts`, the correct way to value ratios for a Σmakes/Σattempts lineup. Population (not sample) std — the population *is* the valuation universe.
+  - `optimize.py`: the objective is now a pluggable `objective: Objective` arg on `best_response` (default `objective_catwins`, the renamed Objective-A `_score`). Construction heuristic + matcher unchanged. Zero behaviour change for Objective A.
+  - Tests: z-score centring/TO-inversion/volume-weighting/empty-population + a pluggable-objective override → **41 passing**.
+  - **Live sanity check** (period 12, 279-player population): top total-z values are SGA (+12.1), Kawhi (+11.9), Maxey (+11.0), Wembanyama (+10.3) — all genuine studs; bottom are 0p/0r/0a end-of-bench/DNP players. Rankings are sensible.
+- **Stage B2 (next) — the load-bearing design fork to settle:** how the optimizer consumes z-scores. Two coherent flavours: (a) **opponent-aware** — keep the catwins M1/M2/Δ metric but use a z-weighted margin so punting becomes quantified (fits the project's opponent-relative spine, directly comparable to Objective A); (b) **standalone max-total-z** — opponent-independent "best team by the numbers," a bigger philosophical departure. Also to decide in B2: the z-score **population** (league-wide rostered per-game rates vs the candidate pool) and where it's plumbed (engine builds the model once per period and passes the objective closure into `best_response`). Leaning (a) unless directed otherwise.
