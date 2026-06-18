@@ -10,10 +10,10 @@ The ``objective`` selects what "optimal" means:
 
 - ``"catwins"`` (Objective A): each side best-responds to the other's *actual*
   line (one-round best response). The metric and the objective coincide.
-- ``"zscore"`` (Objective B): each side plays its max-total-z-value lineup,
-  *independent* of the opponent, against one league-wide z-score model for the
-  period. catwins is then a readout on the result, not what was optimized.
-- ``"raw"`` (Objective C): like B but maximizes raw output (no scarcity
+- ``"zscore"`` (Objective B): each side fields a full lineup chosen by z-score
+  value, *independent* of the opponent, against one league-wide z-score model
+  for the period. catwins is then a readout, not what was optimized.
+- ``"raw"`` (Objective C): like B but chosen by raw output (no scarcity
   weighting); also opponent-independent, catwins as a readout.
 
 See docs/PROMPT_LOG.md.
