@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from datetime import date
 
 from ..models import PlayerDay, PlayerLine, RosterDay
+from ..optimize import Slot
 
 
 class LeaguePlatform(ABC):
@@ -18,6 +19,10 @@ class LeaguePlatform(ABC):
     @abstractmethod
     def team_ids(self) -> list[str]:
         """All team ids in the league."""
+
+    @abstractmethod
+    def active_slots(self) -> list[Slot]:
+        """The league's active lineup slots (capacity + position eligibility)."""
 
     @abstractmethod
     def scoring_dates(self) -> dict[int, date]:

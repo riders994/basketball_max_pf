@@ -1,7 +1,6 @@
 import csv
 import io
 
-from max_pf.__main__ import parse_periods
 from max_pf.models import PlayerLine
 from max_pf.optimize import Candidate, Slot
 from max_pf.report import (
@@ -11,13 +10,6 @@ from max_pf.report import (
     render_table,
     season_report,
 )
-
-
-def test_parse_periods():
-    assert parse_periods(None) is None
-    assert parse_periods("3-6") == [3, 4, 5, 6]
-    assert parse_periods("1,2,5") == [1, 2, 5]
-    assert parse_periods("5, 1-3 ,5") == [1, 2, 3, 5]
 
 
 def test_team_season_derived_metrics():

@@ -84,30 +84,40 @@ pip install -e ".[fantrax,boxscores]"   # add 'dev' for the test suite
 ```
 
 `fantrax` pulls the FantraxAPI fork at `@stable`; `boxscores` pulls
-beautifulsoup4 for the basketball-reference source. (Per packaging convention,
-all version specifiers are `>=` for compatibility.)
+beautifulsoup4 for the basketball-reference source; `yaml` adds YAML login-file
+support on the CLI (JSON works without it). (Per packaging convention, all
+version specifiers are `>=` for compatibility.)
 
 ## Usage
 
-```bash
-# A-expected season report (prints a table, writes season_report.csv/.md)
-python -m max_pf <league_id>
-
-# A-hindsight, a subset of periods, custom output prefix
-python -m max_pf <league_id> --methodology hindsight --periods 1-6 --out reports/half1
-```
-
-Programmatic:
+**Programmatic** — pass a *login dict* naming the platform and its details; you
+get back the season-to-date report rows (render with the `render_*` helpers):
 
 ```python
-from max_pf.platforms.fantrax import FantraxPlatform
-from max_pf import engine
+import max_pf
 
-p = FantraxPlatform("<league_id>")
-slots = p.active_slots()                       # derived from the league
-d = engine.period_delta(p, team_id, period, slots, "expected")
-print(d.m1, d.m2, d.delta)
+rows = max_pf.run({"platform": "fantrax", "league_id": "wserh14rmbbpqtcg"})
+print(max_pf.render_table(rows))
+
+# Scope to one week or a selection, and pick methodology / objective:
+rows = max_pf.run(login, weeks="1-6", methodology="hindsight", objective="zscore")
+rows = max_pf.run(login, weeks=6)            # a single week
 ```
+
+`weeks` accepts a single int, a list, or a spec string (`"5"`, `"1-6"`,
+`"1,2,5"`); `None` (the default) is the whole season to date. Box scores back
+both methodologies by default; pass `boxscores=False` for the no-extra-dependency
+Fantrax estimator (A-expected only).
+
+**Command line** — point it at a JSON or YAML file holding the same login dict:
+
+```bash
+# league.json: {"platform": "fantrax", "league_id": "wserh14rmbbpqtcg"}
+python -m max_pf league.json
+python -m max_pf league.yaml --weeks 1-6 --methodology hindsight --out reports/half1
+```
+
+It prints the table and writes `<out>.csv` and `<out>.md`.
 
 ## Findings
 

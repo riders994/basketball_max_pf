@@ -22,7 +22,9 @@ dependencies = [
 fantrax = ["fantraxapi @ git+https://github.com/riders994/FantraxAPI@stable"]
 # External box-score source (basketball-reference) for exact stats / A-hindsight.
 boxscores = ["beautifulsoup4>=4.12", "requests>=2.28"]
-dev = ["pytest>=7"]
+# YAML login files on the command line (JSON works without this).
+yaml = ["pyyaml>=6"]
+dev = ["pytest>=7", "pyyaml>=6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/max_pf"]
