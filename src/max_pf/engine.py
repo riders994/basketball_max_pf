@@ -13,6 +13,8 @@ The ``objective`` selects what "optimal" means:
 - ``"zscore"`` (Objective B): each side plays its max-total-z-value lineup,
   *independent* of the opponent, against one league-wide z-score model for the
   period. catwins is then a readout on the result, not what was optimized.
+- ``"raw"`` (Objective C): like B but maximizes raw output (no scarcity
+  weighting); also opponent-independent, catwins as a readout.
 
 See docs/PROMPT_LOG.md.
 """
@@ -22,7 +24,14 @@ from typing import Protocol
 
 from .metric import DeltaResult, compute_delta
 from .models import PlayerLine
-from .optimize import Candidate, Objective, Slot, best_response, make_total_z_objective
+from .optimize import (
+    Candidate,
+    Objective,
+    Slot,
+    best_response,
+    make_total_raw_objective,
+    make_total_z_objective,
+)
 
 
 class SupportsMaxPF(Protocol):
@@ -37,13 +46,15 @@ class SupportsMaxPF(Protocol):
 def _objective_for(platform: SupportsMaxPF, period: int, objective: str) -> Objective | None:
     """Resolve the objective name to a callable for ``best_response``.
 
-    ``"catwins"`` -> None (best_response's default Objective A); ``"zscore"`` ->
-    a total-z objective built from the period's league-wide z-score model.
+    ``"catwins"`` -> None (best_response's default Objective A); ``"zscore"`` /
+    ``"raw"`` -> a value objective built from the period's league-wide model.
     """
     if objective == "catwins":
         return None
     if objective == "zscore":
         return make_total_z_objective(platform.zscore_model(period))
+    if objective == "raw":
+        return make_total_raw_objective(platform.zscore_model(period))
     raise ValueError(f"unknown objective: {objective!r}")
 
 

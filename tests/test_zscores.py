@@ -51,6 +51,19 @@ def test_ratio_impact_is_volume_weighted():
     assert z(hi_vol)["fg_pct"] > z(lo_vol)["fg_pct"] > 0
 
 
+def test_raw_value_rewards_volume_over_balance_and_penalizes_turnovers():
+    model = build_model(_population())
+    # Objective C: a pure high-volume scorer outranks a balanced low-volume line,
+    # because raw output isn't scarcity-weighted (PTS dominates the sum).
+    scorer = PlayerLine(pts=40, fgm=15, fga=30)
+    balanced = PlayerLine(pts=4, reb=4, ast=4, stl=2, blk=2, tpm=2)
+    assert model.raw_value(scorer) > model.raw_value(balanced)
+    # Turnovers subtract from raw output.
+    clean = PlayerLine(pts=20, to=0)
+    sloppy = PlayerLine(pts=20, to=8)
+    assert model.raw_value(clean) > model.raw_value(sloppy)
+
+
 def test_empty_population_rejected():
     with pytest.raises(ValueError):
         build_model([])

@@ -122,20 +122,36 @@ def objective_catwins(started: list[list["Candidate"]], target: PlayerLine) -> t
     return res.points_for, margin
 
 
-def make_total_z_objective(model) -> Objective:
-    """Objective B: maximize the lineup's total z-score value (opponent-independent).
+def _value_objective(value_fn: Callable[[PlayerLine], float]) -> Objective:
+    """An opponent-independent objective: sum a per-player value over the lineup.
 
-    Each started player-game is valued by :meth:`ZScoreModel.value` at per-game
-    scale and summed; ``target`` is ignored (the best lineup doesn't depend on the
-    opponent). Because value is separable across players and days, this picks the
-    highest-value feasible lineup each day. The catwins metric is then a *readout*
-    on the result, not what was optimized.
+    ``value_fn`` scores one candidate's (per-game-scale) line. Because the total
+    is separable across players and days, ``best_response`` converges to the
+    highest-value feasible lineup each day; ``target`` is ignored.
     """
 
     def objective(started: list[list["Candidate"]], target: PlayerLine) -> float:
-        return sum(model.value(c.line) for day in started for c in day)
+        return sum(value_fn(c.line) for day in started for c in day)
 
     return objective
+
+
+def make_total_z_objective(model) -> Objective:
+    """Objective B: maximize total z-score value (scarcity-weighted, opponent-independent).
+
+    The catwins metric becomes a *readout* on the result, not what was optimized.
+    """
+    return _value_objective(model.value)
+
+
+def make_total_raw_objective(model) -> Objective:
+    """Objective C: maximize total raw output (scarcity-blind, opponent-independent).
+
+    Same population/model as Objective B but values players by
+    :meth:`ZScoreModel.raw_value` (no std weighting), so the lineup chases raw
+    production rather than balanced rarity. catwins is again a readout.
+    """
+    return _value_objective(model.raw_value)
 
 
 def _aggregate_started(started: list[list[Candidate]]) -> PlayerLine:

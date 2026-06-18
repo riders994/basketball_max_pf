@@ -37,9 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--methodology", choices=["expected", "hindsight"], default="expected",
                         help="expected = season-to-date box-score projections; "
                              "hindsight = realized box scores (both use basketball-reference)")
-    parser.add_argument("--objective", choices=["catwins", "zscore"], default="catwins",
+    parser.add_argument("--objective", choices=["catwins", "zscore", "raw"], default="catwins",
                         help="catwins = Objective A (opponent-aware category wins); "
-                             "zscore = Objective B (max total z-value lineup)")
+                             "zscore = Objective B (max total z-value lineup); "
+                             "raw = Objective C (max raw output lineup)")
     args = parser.parse_args(argv)
 
     from .platforms.fantrax import FantraxPlatform  # imported here so --help works without the extra

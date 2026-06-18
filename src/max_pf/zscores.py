@@ -77,6 +77,18 @@ class ZScoreModel:
         """Total z-score value: the sum across all 9 categories."""
         return sum(self.zscores(line).values())
 
+    def raw_value(self, line: PlayerLine) -> float:
+        """Total *raw* output: Objective C's scarcity-blind counterpart to value.
+
+        Sums the per-category raw quantities (counting stats with TO subtracted,
+        FG%/FT% as volume-weighted impact) *without* dividing by std. With no
+        scarcity weighting the sum is dominated by high-volume categories (PTS,
+        REB), so this rewards raw production rather than balanced rarity. Centring
+        by the mean is omitted: it shifts every player by the same constant and
+        so never changes which lineup maximizes the total.
+        """
+        return sum(_raw_value(line, key, self.league_pcts) for key in CATEGORY_KEYS)
+
 
 def build_model(population: list[PlayerLine]) -> ZScoreModel:
     """Fit a :class:`ZScoreModel` to a population of per-game player lines."""

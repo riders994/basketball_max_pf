@@ -87,6 +87,20 @@ def test_zscore_objective_picks_max_value_lineup_independent_of_opponent():
     assert res.m1.points_for == catwins(strong.line, plat.actual_team_line("opp", 1)).points_for
 
 
+def test_raw_objective_routes_and_picks_high_output_lineup():
+    strong = _cand("m_hi", pts=40, reb=12, ast=9, stl=3, blk=2, tpm=4, to=1, fgm=15, fga=25, ftm=8, fta=9)
+    weak = _cand("m_lo", pts=3, reb=1, ast=0, stl=0, blk=0, tpm=0, to=5, fgm=1, fga=9, ftm=1, fta=2)
+    opp = _cand("o1", pts=20, reb=8, ast=5, stl=1, blk=1, tpm=2, to=3, fgm=8, fga=16, ftm=4, fta=6)
+    plat = FakePlatform(
+        opp={("me", 1): "opp"},
+        actuals={("me", 1): PlayerLine(pts=10), ("opp", 1): PlayerLine(pts=10)},
+        cands={("me", 1): [[strong, weak]], ("opp", 1): [[opp]]},
+    )
+    res = period_delta(plat, "me", 1, [Slot("Flx")], objective="raw")
+    assert res is not None
+    assert res.m1.points_for == catwins(strong.line, plat.actual_team_line("opp", 1)).points_for
+
+
 def test_bye_period_returns_none():
     plat = FakePlatform(opp={("me", 5): None}, actuals={}, cands={})
     assert period_delta(plat, "me", 5, SLOTS) is None

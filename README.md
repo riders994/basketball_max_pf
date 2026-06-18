@@ -36,10 +36,12 @@ FG% and FT% are aggregated correctly across a lineup via Σmakes / Σattempts
 (never by averaging percentages); TO is treated as lower-is-better.
 
 The best-response above is **Objective A** (the default, `--objective catwins`):
-each side optimizes category wins against the other's *actual* lineup. An
-alternative objective, **Objective B** (`--objective zscore`), instead plays
-each side's opponent-independent **max-total-z-value** lineup, with catwins as a
-readout (see [Roadmap](#roadmap)). The optimizer's objective is pluggable.
+each side optimizes category wins against the other's *actual* lineup. The
+optimizer's objective is pluggable, with two opponent-independent alternatives
+that play a fixed best lineup and report catwins as a readout: **Objective B**
+(`--objective zscore`) maximizes total **z-score value** (scarcity-weighted), and
+**Objective C** (`--objective raw`) maximizes total **raw output** (scarcity-blind,
+volume-chasing). See [Roadmap](#roadmap).
 
 ## Two methodologies
 
@@ -143,7 +145,11 @@ projection useful before results are in.
   plays each side's opponent-independent max-total-z-value lineup (league-wide
   per-game population; volume-weighted ratio impact, TO inverted); catwins is a
   readout. Objective A's category-win M1 is >= Objective B's by construction.
-- Objective C (raw statistical output) and the Nash "mutual ceiling".
+- Objective C (raw statistical output) — **done**. `--objective raw` plays each
+  side's max-raw-output lineup (same league-wide population as B, but values
+  players without scarcity weighting, so it chases volume); opponent-independent,
+  catwins as a readout.
+- Nash "mutual ceiling" (two-player equilibrium).
 - Nash "mutual ceiling" (two-player equilibrium) as an advanced methodology.
 
 See [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.
