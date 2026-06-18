@@ -407,3 +407,16 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
 - **pyproject:** removed the `fantrax` git extra and the `[tool.hatch.metadata] allow-direct-references` it required; `requests` stays core (vendored adapter + bref both use it); `boxscores` trimmed to just beautifulsoup4.
 - **Validated self-containment:** uninstalled the top-level `fantraxapi`, then `from max_pf._vendor.fantraxapi import League` resolves, **52 tests pass**, and a live fetch of league `wserh14rmbbpqtcg` works (16 teams / 24 periods / 9 slots). Built the wheel: 19 vendored files + LICENSE + NOTICE shipped, and **`Requires-Dist` carries no `@ url` direct reference** → PyPI-clean.
 - README updated (install drops the `[fantrax]` extra; data-sources notes the vendoring). To refresh the fork later: re-copy at the new commit per `_vendor/NOTICE.md`. Once the user has their own `fantraxapi` on PyPI, the vendor dir can be swapped back for a normal versioned dependency.
+
+## Prompt 33 — 2026-06-18
+
+> Add my email as r.vahalia@gmail.com, get rid of the stale artifacts. We'll fix that up when we do the next round of release work on the open roadmap items. Make sure open roadmap items are recorded as todos. After all of that, do everything except make the git tag and prep this branch for merge.
+
+*Response notes:*
+- **v1.0.0 release prep** (everything except the git tag, which the user makes after merge):
+  - `pyproject`: version `0.0.1` → **`1.0.0`**; author email `r.vahalia@gmail.com`; added 9 trove `classifiers` (Production/Stable, MIT, Python 3.11/3.12, topics), `[project.urls]` (Homepage/Repository/Issues/Changelog), and a `[project.scripts]` console entry point **`max-pf = max_pf.__main__:main`** (so `max-pf league.json` works, not just `python -m max_pf`).
+  - **Removed the stale `season_report.*` artifacts** (4 files) — generated on the old estimator path, pre-dating exact A-expected on box scores. Regeneration deferred to the next round (recorded as a todo).
+  - **`CHANGELOG.md`** (Keep a Changelog) with the 1.0.0 entry; **`TODO.md`** recording the open roadmap items as checkboxes: artifact regeneration, Nash stage 2 (mixed/minimax LP), M3 in the report, replace vendored fantraxapi with a PyPI dep, CI, optional vendor pruning, more platforms.
+  - README: Findings no longer links the deleted artifacts (points to TODO.md + the CLI); Roadmap trimmed (dropped the stale artifact note + a duplicate Nash bullet) and points open work to TODO.md.
+  - **Verified the wheel**: `max_pf-1.0.0`, author-email set, 9 classifiers, 4 Project-URLs, `max-pf` console_scripts entry point, 19 vendored files shipped, **no `@ url` in Requires-Dist** (PyPI-clean). 52 tests pass.
+- Branch prepped for merge (committed + pushed to `initial_dev`); **git tag `v1.0.0` intentionally NOT created** — the user will tag after merging to `primary` (the CHANGELOG/release URL reference `v1.0.0`).

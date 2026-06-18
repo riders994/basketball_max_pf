@@ -124,9 +124,10 @@ It prints the table and writes `<out>.csv` and `<out>.md`.
 ## Findings
 
 Full-season run on the finished public league `wserh14rmbbpqtcg` ("Mao's Macho
-Mandarins", 2025-26 NBA, 16 teams × 24 periods). Artifacts:
-[`season_report.md`](season_report.md) (A-expected) and
-[`season_report_hindsight.md`](season_report_hindsight.md) (A-hindsight).
+Mandarins", 2025-26 NBA, 16 teams × 24 periods), A-expected vs A-hindsight.
+(The committed sample reports were removed in 1.0.0 pending regeneration on the
+box-score default — see [`TODO.md`](TODO.md); reproduce with
+`python -m max_pf league.json [--methodology hindsight]`.)
 
 - **The ceiling invariant holds under hindsight.** M1 ≥ Actual for every team
   in both reports; A-hindsight makes this a *guarantee* (realized data),
@@ -153,9 +154,7 @@ projection useful before results are in.
   bit-identical to the pre-update fork; see the prompt log).
 - Exact A-expected on box scores (estimator replaced as the metric's data
   source) — **done**; reproduces the estimator's category-win metric while using
-  real makes/attempts and the real schedule. (The committed `season_report.*`
-  artifact was generated on the earlier estimator path; regenerating it on box
-  scores is the next full run.)
+  real makes/attempts and the real schedule.
 - Objective B (z-score / punt-aware weighting) — **done**. `--objective zscore`
   plays each side's opponent-independent max-total-z-value lineup (league-wide
   per-game population; volume-weighted ratio impact, TO inverted); catwins is a
@@ -168,8 +167,8 @@ projection useful before results are in.
   `engine.nash_ceiling` runs iterated best response to the fixed point where each
   lineup best-responds to the other (pure-strategy Nash), yielding **M3** = the
   both-sides-optimal category split; it flags cycles (no pure equilibrium). On
-  the test league it converges in ~80% of periods. Stage 2 (mixed-strategy /
-  minimax value via double-oracle LP) would resolve the cycling periods.
-- Nash "mutual ceiling" (two-player equilibrium) as an advanced methodology.
+  the test league it converges in ~80% of periods.
 
-See [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.
+Open items (Nash stage 2, M3 in the report, artifact regeneration, CI, more
+platforms) are tracked in [`TODO.md`](TODO.md). See
+[`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.

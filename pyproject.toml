@@ -4,13 +4,24 @@ build-backend = "hatchling.build"
 
 [project]
 name = "max-pf"
-version = "0.0.1"
+version = "1.0.0"
 description = "Methodology + tooling to compute the 'max points for' metric for 9-cat fantasy basketball leagues."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-authors = [{ name = "Rohan V" }]
+authors = [{ name = "Rohan V", email = "r.vahalia@gmail.com" }]
 keywords = ["fantasy", "basketball", "9-cat", "fantrax", "optimization"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 # Convention: dependency version constraints use `>=` (lower bound only), never
 # `==`/`~=`/upper caps, for the broadest install compatibility.
 # requests is required at runtime: the vendored fantraxapi adapter and the
@@ -26,6 +37,15 @@ boxscores = ["beautifulsoup4>=4.12"]
 # YAML login files on the command line (JSON works without this).
 yaml = ["pyyaml>=6"]
 dev = ["pytest>=7", "pyyaml>=6"]
+
+[project.scripts]
+max-pf = "max_pf.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/riders994/basketball_max_pf"
+Repository = "https://github.com/riders994/basketball_max_pf"
+Issues = "https://github.com/riders994/basketball_max_pf/issues"
+Changelog = "https://github.com/riders994/basketball_max_pf/blob/primary/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/max_pf"]
