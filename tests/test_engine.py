@@ -3,6 +3,7 @@ from max_pf.metric import catwins
 from max_pf.models import PlayerLine
 from max_pf.optimize import Candidate, Slot
 from max_pf.platforms.fantrax import team_line_from_grid
+from max_pf.zscores import build_model
 
 
 def test_team_line_from_grid_sets_percentages_and_counts():
@@ -43,6 +44,11 @@ class FakePlatform:
     def period_candidates(self, team_id, period, methodology="expected"):
         return self._cands[(team_id, period)]
 
+    def zscore_model(self, period):
+        # League-wide population: every candidate line across both teams.
+        pop = [c.line for cands in self._cands.values() for day in cands for c in day]
+        return build_model(pop)
+
 
 def test_period_delta_wires_one_round_best_response():
     my_actual = PlayerLine(pts=400, reb=150, ast=100, stl=30, blk=20, tpm=40, to=80, fgm=45, fga=100, ftm=70, fta=90)
@@ -62,6 +68,23 @@ def test_period_delta_wires_one_round_best_response():
     assert res.actual == catwins(my_actual, opp_actual)
     # M1 (vs opp's actual) should be at least as good as M2 (vs opp's optimum).
     assert res.m1.points_for >= res.m2.points_for
+
+
+def test_zscore_objective_picks_max_value_lineup_independent_of_opponent():
+    # One slot forces a choice between a strong and a weak candidate.
+    strong = _cand("m_hi", pts=40, reb=12, ast=9, stl=3, blk=2, tpm=4, to=1, fgm=15, fga=25, ftm=8, fta=9)
+    weak = _cand("m_lo", pts=3, reb=1, ast=0, stl=0, blk=0, tpm=0, to=5, fgm=1, fga=9, ftm=1, fta=2)
+    opp = _cand("o1", pts=20, reb=8, ast=5, stl=1, blk=1, tpm=2, to=3, fgm=8, fga=16, ftm=4, fta=6)
+    plat = FakePlatform(
+        opp={("me", 1): "opp"},
+        actuals={("me", 1): PlayerLine(pts=10), ("opp", 1): PlayerLine(pts=10)},
+        cands={("me", 1): [[strong, weak]], ("opp", 1): [[opp]]},
+    )
+    res = period_delta(plat, "me", 1, [Slot("Flx")], objective="zscore")
+    assert res is not None
+    # The z-objective started the high-value player regardless of the opponent;
+    # mine_opt's line reflects the strong candidate, not the weak one.
+    assert res.m1.points_for == catwins(strong.line, plat.actual_team_line("opp", 1)).points_for
 
 
 def test_bye_period_returns_none():

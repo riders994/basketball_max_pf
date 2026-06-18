@@ -57,7 +57,7 @@ def test_pluggable_objective_can_override_default():
     # the high scorer; the default catwins objective is the explicit default.
     a = cand("A", ("PG",), pts=40)
     b = cand("B", ("SG",), pts=5)
-    pts_only = lambda line, target: line.pts
+    pts_only = lambda started, target: sum(c.line.pts for day in started for c in day)
     res = best_response([[a, b]], [Slot("Flx")], target=PlayerLine(), objective=pts_only)
     assert res.started[0] == ["A"]
     # Default objective path still works unchanged.

@@ -227,6 +227,8 @@ class FantraxPlatform(LeaguePlatform):
         # Each (team, period) candidate set is otherwise computed twice (once as
         # a team, once as its opponent's opponent). Keyed by methodology too.
         self._candidates_cache: dict[tuple[str, int, str], list[list[Candidate]]] = {}
+        # League-wide z-score model per period (Objective B); built once, shared.
+        self._zscore_cache: dict[int, object] = {}
 
     def team_ids(self) -> list[str]:
         return [t.id for t in self._league.teams]
@@ -320,6 +322,31 @@ class FantraxPlatform(LeaguePlatform):
             result = self.expected_source.expected_candidates(team_id, period)
         self._candidates_cache[key] = result
         return result
+
+    def league_per_game_population(self, period: int) -> list[PlayerLine]:
+        """Every rostered player's season-to-date per-game line for a period.
+
+        Deduplicated across all teams (one entry per player). This is the
+        valuation universe for Objective B's z-score model. Built from the
+        A-expected candidates (per-game rates); each player's rate is identical
+        across the days they appear, so one is taken.
+        """
+        by_player: dict[str, PlayerLine] = {}
+        for team_id in self.team_ids():
+            for day in self.period_candidates(team_id, period, "expected"):
+                for cand in day:
+                    by_player.setdefault(cand.player_id, cand.line)
+        return list(by_player.values())
+
+    def zscore_model(self, period: int):
+        """League-wide z-score model for a period (memoized; shared by both sides)."""
+        cached = self._zscore_cache.get(period)
+        if cached is None:
+            from ..zscores import build_model
+
+            cached = build_model(self.league_per_game_population(period))
+            self._zscore_cache[period] = cached
+        return cached
 
     def use_boxscores(self, client) -> None:
         """Attach a basketball-reference box-score source for both methodologies.

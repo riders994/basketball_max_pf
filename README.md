@@ -35,6 +35,12 @@ avoiding the Nash infinite regress):
 FG% and FT% are aggregated correctly across a lineup via Σmakes / Σattempts
 (never by averaging percentages); TO is treated as lower-is-better.
 
+The best-response above is **Objective A** (the default, `--objective catwins`):
+each side optimizes category wins against the other's *actual* lineup. An
+alternative objective, **Objective B** (`--objective zscore`), instead plays
+each side's opponent-independent **max-total-z-value** lineup, with catwins as a
+readout (see [Roadmap](#roadmap)). The optimizer's objective is pluggable.
+
 ## Two methodologies
 
 The optimizer needs a target statline for each player. Where that comes from is
@@ -133,9 +139,11 @@ projection useful before results are in.
   real makes/attempts and the real schedule. (The committed `season_report.*`
   artifact was generated on the earlier estimator path; regenerating it on box
   scores is the next full run.)
-- Objective B (z-score / punt-aware weighting): foundation done — a `zscores`
-  module (volume-weighted ratio impact, TO inverted) plus a pluggable optimizer
-  objective. Next: wire a z-score objective through the engine. Then Objective C.
+- Objective B (z-score / punt-aware weighting) — **done**. `--objective zscore`
+  plays each side's opponent-independent max-total-z-value lineup (league-wide
+  per-game population; volume-weighted ratio impact, TO inverted); catwins is a
+  readout. Objective A's category-win M1 is >= Objective B's by construction.
+- Objective C (raw statistical output) and the Nash "mutual ceiling".
 - Nash "mutual ceiling" (two-player equilibrium) as an advanced methodology.
 
 See [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.

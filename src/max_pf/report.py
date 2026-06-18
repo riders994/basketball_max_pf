@@ -49,9 +49,10 @@ _COLUMNS = ["Team", "GP", "Actual", "M1", "M2", "Delta", "Luck"]
 
 
 def build_team_season(
-    platform, team_id: str, periods: list[int], slots: list[Slot], methodology: str = "expected"
+    platform, team_id: str, periods: list[int], slots: list[Slot],
+    methodology: str = "expected", objective: str = "catwins",
 ) -> TeamSeason:
-    results = season_deltas(platform, team_id, periods, slots, methodology)
+    results = season_deltas(platform, team_id, periods, slots, methodology, objective)
     return TeamSeason(
         team_id=team_id,
         name=platform.team_name(team_id),
@@ -63,11 +64,13 @@ def build_team_season(
 
 
 def season_report(
-    platform, slots: list[Slot], periods: list[int] | None = None, methodology: str = "expected"
+    platform, slots: list[Slot], periods: list[int] | None = None,
+    methodology: str = "expected", objective: str = "catwins",
 ) -> list[TeamSeason]:
     """Compute the season summary for every team, sorted by actual points for."""
     periods = periods or platform.matchup_periods()
-    rows = [build_team_season(platform, tid, periods, slots, methodology) for tid in platform.team_ids()]
+    rows = [build_team_season(platform, tid, periods, slots, methodology, objective)
+            for tid in platform.team_ids()]
     rows.sort(key=lambda r: r.actual_pf, reverse=True)
     return rows
 

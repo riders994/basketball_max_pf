@@ -29,10 +29,12 @@ from .categories import CATEGORIES
 from .metric import CategoryResult, catwins
 from .models import PlayerLine, aggregate
 
-# An objective scores a candidate aggregate line against the opponent target,
-# returning any orderable value (higher = better). Objective A is the default
-# (:func:`objective_catwins`); Objective B plugs in a z-score-weighted variant.
-Objective = Callable[[PlayerLine, PlayerLine], object]
+# An objective scores a started selection (per-day lists of Candidate) against
+# the opponent target, returning any orderable value (higher = better). It takes
+# the candidates rather than just the aggregate line so value-based objectives
+# can score players at per-game scale. Objective A is the default
+# (:func:`objective_catwins`); Objective B is :func:`make_total_z_objective`.
+Objective = Callable[[list[list["Candidate"]], PlayerLine], object]
 
 
 @dataclass(frozen=True)
@@ -101,12 +103,14 @@ def _construct_day(candidates: list[Candidate], slots: list[Slot]) -> list[Candi
     return chosen
 
 
-def objective_catwins(line: PlayerLine, target: PlayerLine) -> tuple[float, float]:
+def objective_catwins(started: list[list["Candidate"]], target: PlayerLine) -> tuple[float, float]:
     """Objective A: maximize category points, then total normalized margin.
 
     The margin term gives the local search a gradient toward flipping near-miss
-    categories even when the category-win count is unchanged.
+    categories even when the category-win count is unchanged. Opponent-aware: the
+    started selection is aggregated and compared to ``target``.
     """
+    line = _aggregate_started(started)
     res = catwins(line, target)
     mine, theirs = line.category_values(), target.category_values()
     margin = 0.0
@@ -116,6 +120,22 @@ def objective_catwins(line: PlayerLine, target: PlayerLine) -> tuple[float, floa
             diff = -diff
         margin += diff / (abs(theirs[cat.key]) or 1.0)
     return res.points_for, margin
+
+
+def make_total_z_objective(model) -> Objective:
+    """Objective B: maximize the lineup's total z-score value (opponent-independent).
+
+    Each started player-game is valued by :meth:`ZScoreModel.value` at per-game
+    scale and summed; ``target`` is ignored (the best lineup doesn't depend on the
+    opponent). Because value is separable across players and days, this picks the
+    highest-value feasible lineup each day. The catwins metric is then a *readout*
+    on the result, not what was optimized.
+    """
+
+    def objective(started: list[list["Candidate"]], target: PlayerLine) -> float:
+        return sum(model.value(c.line) for day in started for c in day)
+
+    return objective
 
 
 def _aggregate_started(started: list[list[Candidate]]) -> PlayerLine:
@@ -140,7 +160,7 @@ def best_response(
             opponent-aware category wins; Objective B passes a z-score variant).
     """
     started = [_construct_day(day, slots) for day in daily_candidates]
-    best = objective(_aggregate_started(started), target)
+    best = objective(started, target)
 
     for _ in range(max_passes):
         best_move = None  # (day_index, new_day_selection, score)
@@ -166,7 +186,7 @@ def best_response(
 
             for cand_day in neighbors:
                 trial = started[:d] + [cand_day] + started[d + 1:]
-                score = objective(_aggregate_started(trial), target)
+                score = objective(trial, target)
                 if score > best and (best_move is None or score > best_move[2]):
                     best_move = (d, cand_day, score)
 
