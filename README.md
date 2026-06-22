@@ -30,9 +30,11 @@ avoiding the Nash infinite regress):
 | **M1** | catwins(`mine_opt`, `opp_actual`) | your exploitation ceiling vs how they actually played |
 | **M2** | catwins(`mine_opt`, `their_opt`) | the same lineup vs their best counter |
 | **Δ** | M1 − M2 | the **opponent-mismanagement dividend** — points banked purely because the opponent didn't optimize |
+| **Potential** | Actual − M1 | realized result vs your **exploitation ceiling** — points left on the table against the opponent's actual play (≤ 0 under hindsight, where M1 ≥ Actual). Shown in every report. |
 | **M3** | mutual ceiling | the two-player equilibrium value — both managers play optimally against each other (pure- or mixed-strategy). See [Roadmap](#roadmap). |
 | **M1 − M3** | opponent-passivity dividend | how much of M1 relied on the opponent *not* also optimizing (M1 ≥ M3, so ≥ 0) |
-| **Luck** | Actual − M3 | realized result vs the both-optimal equilibrium — positive ⇒ you scored above the mutual ceiling (opponent passivity, or a hot week); negative ⇒ below it. Shown only alongside the Nash columns. |
+| **Anticipation** | M3 − M2 | the swing from the decoupled both-optimize estimate (M2, each side aimed at the other's actual) to the true equilibrium (M3) — the value of mutual strategic anticipation (usually positive). Shown with the Nash columns. |
+| **Luck** | Actual − M3 | realized result vs the both-optimal equilibrium — positive ⇒ you scored above the mutual ceiling (opponent passivity, or a hot week); negative ⇒ below it. Shown with the Nash columns. |
 
 FG% and FT% are aggregated correctly across a lineup via Σmakes / Σattempts
 (never by averaging percentages); TO is treated as lower-is-better.

@@ -27,3 +27,7 @@ are added automatically; don't edit them by hand.
 ## 2026-06-22T18:17:15-04:00
 
 > Merged, but just had a thought. I think Luck should be actual - M3, the scenario where both players are intelligent. Let's pull from primary and make a new round of changes
+
+## 2026-06-22T18:23:22-04:00
+
+>  The original luck metric (Actual - M1) should be renamed Potential. I want another metric for M3 - M2. What do you think it should be?

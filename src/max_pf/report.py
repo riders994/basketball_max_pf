@@ -13,17 +13,21 @@ Columns:
 - M1: projection-optimal lineup vs each opponent's actual line (sum).
 - M2: projection-optimal lineup vs each opponent's projection-optimum (sum).
 - Delta = M1 - M2: the opponent-mismanagement dividend.
+- Potential = Actual - M1: realized result vs your exploitation ceiling — points
+  left on the table against the opponent's actual play. (M1-only, always shown.)
 
-With ``include_nash`` three more columns appear (per-period Nash mutual ceiling,
+With ``include_nash`` four more columns appear (per-period Nash mutual ceiling,
 ``engine.season_nash``; see docs/PROMPT_LOG.md):
 - M3: the mutual-ceiling score (sum) — both managers play their equilibrium
   lineup, so neither can exploit the other. Pure or mixed-strategy value alike.
 - M1-M3: the opponent-passivity dividend — how much of my exploitation ceiling
   M1 relied on the opponent *not* also optimizing (M1 >= M3, so this is >= 0).
+- Anticipation = M3 - M2: the swing from the decoupled both-optimize estimate
+  (M2, each side aimed at the other's actual) to the true equilibrium (M3) — the
+  value of mutual strategic anticipation. Usually positive, not guaranteed.
 - Luck = Actual - M3: realized result vs the both-optimal equilibrium. Positive
   = the team scored above the mutual ceiling (opponent passivity, or its own hot
-  week); negative = it underperformed even that ceiling. M3-relative, so it
-  appears only alongside the Nash columns.
+  week); negative = it underperformed even that ceiling.
 """
 from __future__ import annotations
 
@@ -49,6 +53,30 @@ class TeamSeason:
     @property
     def delta(self) -> float:
         return self.m1_pf - self.m2_pf
+
+    @property
+    def potential(self) -> float:
+        """Realized result minus the exploitation ceiling M1.
+
+        The previous ``luck`` definition, renamed: how many category points the
+        team left on the table versus the best lineup it could have set against
+        the opponent's *actual* play. Under A-hindsight M1 >= Actual, so this is
+        <= 0 (pure mismanagement); under A-expected it also carries projection
+        variance. Needs only M1, so it appears in every report.
+        """
+        return self.actual_pf - self.m1_pf
+
+    @property
+    def anticipation(self) -> float:
+        """M3 - M2: the swing from the decoupled both-optimize estimate to equilibrium.
+
+        M2 has each side optimize against the other's *actual* lineup (one
+        decoupled round, so my lineup is mis-aimed); M3 is the true equilibrium
+        where both anticipate the other optimizing. The difference is the value
+        of that mutual anticipation — usually positive, but not guaranteed.
+        M3-relative, so only meaningful (and only shown) when ``m3_pf`` is set.
+        """
+        return (self.m3_pf or 0.0) - self.m2_pf
 
     @property
     def luck(self) -> float:
@@ -87,13 +115,16 @@ def _columns(rows: list[TeamSeason]) -> list[_Column]:
         _Column("M1", lambda r: f"{r.m1_pf:.1f}"),
         _Column("M2", lambda r: f"{r.m2_pf:.1f}"),
         _Column("Delta", lambda r: f"{r.delta:.1f}"),
+        _Column("Potential", lambda r: f"{r.potential:+.1f}"),   # Actual - M1; M1-only
     ]
     if rows and rows[0].m3_pf is not None:
-        # Keep the ceiling family together: M3 after M2, its dividend beside it.
-        # Luck (Actual - M3) is also M3-relative, so it rides with this group.
+        # Keep the ceiling family together: M3 after M2, its M3-relative dividends
+        # (M1-M3, Anticipation) beside it. Luck (Actual - M3) is M3-relative too,
+        # appended so it sits next to Potential (the Actual-M1 sibling) at the end.
         cols[5:5] = [
             _Column("M3", lambda r: f"{r.m3_pf:.1f}"),
             _Column("M1-M3", lambda r: f"{r.m1_minus_m3:+.1f}"),
+            _Column("Anticipation", lambda r: f"{r.anticipation:+.1f}"),
         ]
         cols.append(_Column("Luck", lambda r: f"{r.luck:+.1f}"))
     return cols

@@ -15,8 +15,19 @@ Planned work is tracked in [TODO.md](TODO.md).
   intelligently — rather than against your own one-sided exploitation ceiling.
   Positive Luck means the team scored above that equilibrium (opponent passivity
   or a hot week); negative means it fell short of it. Because Luck now depends on
-  M3, the column is **only shown alongside the Nash columns** (`include_nash`);
-  the quicker `--no-nash` report no longer carries a Luck column.
+  M3, the column is **only shown alongside the Nash columns** (`include_nash`).
+
+### Added
+
+- **`Potential` column (`Actual − M1`)** — the previous `Luck` definition, kept
+  under a clearer name: realized result vs your exploitation ceiling (points left
+  on the table against the opponent's actual play; ≤ 0 under hindsight). M1-only,
+  so it appears in every report, including `--no-nash`.
+- **`Anticipation` column (`M3 − M2`)** — the swing from the decoupled
+  both-optimize estimate (M2, each side aimed at the other's *actual* lineup) to
+  the true equilibrium (M3, where both anticipate the other optimizing). The
+  value of mutual strategic anticipation; usually positive, not guaranteed.
+  M3-relative, so shown with the Nash columns.
 
 ## [1.1.0] - 2026-06-22
 
