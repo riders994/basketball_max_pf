@@ -39,3 +39,7 @@ are added automatically; don't edit them by hand.
 ## 2026-06-22T18:31:48-04:00
 
 > Rename M1-M3 to Passivity
+
+## 2026-06-22T18:34:32-04:00
+
+> I want to do a refactor of the testing. Go through and make sure there are no redundant or excessive tests

@@ -31,15 +31,6 @@ def test_zscores_are_centered_and_turnovers_inverted():
     assert to_z[0] == min(to_z)   # 4 TO -> worst
 
 
-def test_total_value_orders_players_and_rewards_volume_efficiency():
-    model = build_model(_population())
-    # The efficient big shoots .571 FG on volume; the high scorer .500 but with
-    # heavy turnovers. Total value sums all nine standardized categories.
-    values = [model.value(p) for p in _population()]
-    assert len(values) == 3
-    assert all(isinstance(v, float) for v in values)
-
-
 def test_ratio_impact_is_volume_weighted():
     # Same FG% (.500), very different volume -> different standardized impact.
     hi_vol = PlayerLine(fgm=10, fga=20)

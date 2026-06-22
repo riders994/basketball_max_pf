@@ -1,3 +1,5 @@
+import pytest
+
 from max_pf.engine import nash_ceiling, period_delta, season_deltas
 from max_pf.metric import catwins
 from max_pf.models import PlayerLine
@@ -70,8 +72,11 @@ def test_period_delta_wires_one_round_best_response():
     assert res.m1.points_for >= res.m2.points_for
 
 
-def test_zscore_objective_picks_max_value_lineup_independent_of_opponent():
-    # One slot forces a choice between a strong and a weak candidate.
+@pytest.mark.parametrize("objective", ["zscore", "raw"])
+def test_value_objective_routes_and_picks_high_value_lineup(objective):
+    # Both opponent-independent objectives (B=zscore, C=raw) route through the
+    # engine and start the high-value candidate over the weak one, regardless of
+    # the opponent. One slot forces the choice.
     strong = _cand("m_hi", pts=40, reb=12, ast=9, stl=3, blk=2, tpm=4, to=1, fgm=15, fga=25, ftm=8, fta=9)
     weak = _cand("m_lo", pts=3, reb=1, ast=0, stl=0, blk=0, tpm=0, to=5, fgm=1, fga=9, ftm=1, fta=2)
     opp = _cand("o1", pts=20, reb=8, ast=5, stl=1, blk=1, tpm=2, to=3, fgm=8, fga=16, ftm=4, fta=6)
@@ -80,24 +85,9 @@ def test_zscore_objective_picks_max_value_lineup_independent_of_opponent():
         actuals={("me", 1): PlayerLine(pts=10), ("opp", 1): PlayerLine(pts=10)},
         cands={("me", 1): [[strong, weak]], ("opp", 1): [[opp]]},
     )
-    res = period_delta(plat, "me", 1, [Slot("Flx")], objective="zscore")
+    res = period_delta(plat, "me", 1, [Slot("Flx")], objective=objective)
     assert res is not None
-    # The z-objective started the high-value player regardless of the opponent;
     # mine_opt's line reflects the strong candidate, not the weak one.
-    assert res.m1.points_for == catwins(strong.line, plat.actual_team_line("opp", 1)).points_for
-
-
-def test_raw_objective_routes_and_picks_high_output_lineup():
-    strong = _cand("m_hi", pts=40, reb=12, ast=9, stl=3, blk=2, tpm=4, to=1, fgm=15, fga=25, ftm=8, fta=9)
-    weak = _cand("m_lo", pts=3, reb=1, ast=0, stl=0, blk=0, tpm=0, to=5, fgm=1, fga=9, ftm=1, fta=2)
-    opp = _cand("o1", pts=20, reb=8, ast=5, stl=1, blk=1, tpm=2, to=3, fgm=8, fga=16, ftm=4, fta=6)
-    plat = FakePlatform(
-        opp={("me", 1): "opp"},
-        actuals={("me", 1): PlayerLine(pts=10), ("opp", 1): PlayerLine(pts=10)},
-        cands={("me", 1): [[strong, weak]], ("opp", 1): [[opp]]},
-    )
-    res = period_delta(plat, "me", 1, [Slot("Flx")], objective="raw")
-    assert res is not None
     assert res.m1.points_for == catwins(strong.line, plat.actual_team_line("opp", 1)).points_for
 
 
@@ -108,7 +98,7 @@ def test_bye_period_returns_none():
     assert nash_ceiling(plat, "me", 5, SLOTS) is None
 
 
-def test_nash_converges_to_fixed_point():
+def test_nash_converges_to_pure_equilibrium():
     # One dominant candidate per side -> best response is constant -> the pair is
     # immediately a mutual best response (pure Nash equilibrium).
     me = _cand("M", pts=30, reb=10, ast=8)
@@ -119,9 +109,11 @@ def test_nash_converges_to_fixed_point():
         cands={("me", 1): [[me]], ("opp", 1): [[opp]]},
     )
     res = nash_ceiling(plat, "me", 1, [Slot("Flx")])
-    assert res.converged
+    assert res.converged and res.equilibrium == "pure"
     assert res.mine.pts == 30 and res.theirs.pts == 20
+    # M3 is the mutual-ceiling split; for a pure equilibrium value mirrors it.
     assert res.m3 == catwins(me.line, opp.line)
+    assert res.value == res.m3.points_for == res.m3_pf
 
 
 def _cycle_platform():
@@ -138,34 +130,16 @@ def _cycle_platform():
     )
 
 
-def test_nash_detects_cycle_when_no_pure_equilibrium():
-    res = nash_ceiling(_cycle_platform(), "me", 1, [Slot("Flx")], max_rounds=50)
-    assert not res.converged
-    assert res.equilibrium == "mixed"
-
-
 def test_nash_cycle_resolves_to_mixed_strategy_value():
-    # The 4-cycle's payoff matrix (rows me=[A,B], cols opp=[X,Y]) is
-    # [[5, 4], [4, 5]] in category points: a matching-pennies game whose minimax
-    # value is 4.5 at the 50/50 mixture on each side. Stage 2 recovers it.
+    # The 4-cycle has no pure equilibrium: best responses chase each other. Its
+    # payoff matrix (rows me=[A,B], cols opp=[X,Y]) is [[5, 4], [4, 5]] in category
+    # points — a matching-pennies game whose minimax value is 4.5 at the 50/50
+    # mixture on each side. Stage 2 (double-oracle) detects the cycle and recovers it.
     res = nash_ceiling(_cycle_platform(), "me", 1, [Slot("Flx")])
-    assert res.value == 4.5
-    assert res.m3_pf == 4.5
+    assert not res.converged and res.equilibrium == "mixed"
+    assert res.value == 4.5 and res.m3_pf == 4.5
     assert {round(w, 6) for _, w in res.mine_mix} == {0.5}
     assert {round(w, 6) for _, w in res.theirs_mix} == {0.5}
     # Each side's mixture has two lineups summing to a proper distribution.
     assert abs(sum(w for _, w in res.mine_mix) - 1.0) < 1e-9
     assert abs(sum(w for _, w in res.theirs_mix) - 1.0) < 1e-9
-
-
-def test_nash_pure_result_carries_value_equal_to_points_for():
-    me = _cand("M", pts=30, reb=10, ast=8)
-    opp = _cand("O", pts=20, reb=12, ast=4)
-    plat = FakePlatform(
-        opp={("me", 1): "opp"},
-        actuals={("me", 1): PlayerLine(), ("opp", 1): PlayerLine()},
-        cands={("me", 1): [[me]], ("opp", 1): [[opp]]},
-    )
-    res = nash_ceiling(plat, "me", 1, [Slot("Flx")])
-    assert res.equilibrium == "pure"
-    assert res.value == res.m3.points_for == res.m3_pf
