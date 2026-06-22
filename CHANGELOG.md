@@ -6,6 +6,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
+## [Unreleased]
+
+### Changed
+
+- **`Luck` is now `Actual − M3`** (was `Actual − M1`). Luck is measured against
+  the both-optimal mutual ceiling — the equilibrium where both managers play
+  intelligently — rather than against your own one-sided exploitation ceiling.
+  Positive Luck means the team scored above that equilibrium (opponent passivity
+  or a hot week); negative means it fell short of it. Because Luck now depends on
+  M3, the column is **only shown alongside the Nash columns** (`include_nash`);
+  the quicker `--no-nash` report no longer carries a Luck column.
+
 ## [1.1.0] - 2026-06-22
 
 ### Added

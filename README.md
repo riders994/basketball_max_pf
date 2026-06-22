@@ -30,9 +30,9 @@ avoiding the Nash infinite regress):
 | **M1** | catwins(`mine_opt`, `opp_actual`) | your exploitation ceiling vs how they actually played |
 | **M2** | catwins(`mine_opt`, `their_opt`) | the same lineup vs their best counter |
 | **Δ** | M1 − M2 | the **opponent-mismanagement dividend** — points banked purely because the opponent didn't optimize |
-| **Luck** | Actual − M1 | points left on the table (negative ⇒ you fell short of your own ceiling) |
 | **M3** | mutual ceiling | the two-player equilibrium value — both managers play optimally against each other (pure- or mixed-strategy). See [Roadmap](#roadmap). |
 | **M1 − M3** | opponent-passivity dividend | how much of M1 relied on the opponent *not* also optimizing (M1 ≥ M3, so ≥ 0) |
+| **Luck** | Actual − M3 | realized result vs the both-optimal equilibrium — positive ⇒ you scored above the mutual ceiling (opponent passivity, or a hot week); negative ⇒ below it. Shown only alongside the Nash columns. |
 
 FG% and FT% are aggregated correctly across a lineup via Σmakes / Σattempts
 (never by averaging percentages); TO is treated as lower-is-better.
@@ -58,12 +58,10 @@ the **ex-ante vs ex-post** fork, and the package implements both:
   the ceiling is a projection. Rates come from exact basketball-reference
   box scores (real makes/attempts, no estimator); the Fantrax season-to-date
   view + position-based FG/FT attempt estimator is the no-extra-dependency
-  fallback when box scores aren't attached. Its `Luck` mixes forecast variance
-  with real mismanagement.
+  fallback when box scores aren't attached.
 - **A-hindsight** (`--methodology hindsight`) — *realized* per-day box scores
   from basketball-reference, joined to the full historical roster. This is the
-  true "best lineup you could have set" ceiling: **M1 ≥ Actual always**, so
-  `Luck` is genuine lineup mismanagement with projection noise removed.
+  true "best lineup you could have set" ceiling: **M1 ≥ Actual always**.
 
 ## Data sources
 
@@ -142,16 +140,18 @@ Mandarins", 2025-26 NBA, 16 teams × 24 periods), A-expected vs A-hindsight.
   *Trusting the Process*, whose players out-ran their season rates in the games
   actually played.
 - **Hindsight isolates real mismanagement.** With projection variance stripped,
-  `Luck` magnitudes shrink (band −6.5…−60 vs expected −9.5…−66) — the Actual−M1
-  gap becomes genuine points left on the table, not forecast noise.
+  the **Actual−M1 gap** shrinks in magnitude (band −6.5…−60 vs expected −9.5…−66)
+  — it becomes genuine points left on the table, not forecast noise. (This gap is
+  the realized-ceiling shortfall; it predates the `Luck` column's redefinition to
+  Actual−M3 and is distinct from it.)
 - **The dividend Δ tightens to a credible band.** The expected spread (7–73)
   compresses to 11–35 under hindsight. The dbyun89 expected outlier (Δ=73,
   driven by an implausible expected M2=38) corrects to Δ=35 (M2=71), confirming
   it was a projection artifact rather than a real opponent giveaway.
 
 **Takeaway:** A-hindsight is the trustworthy read for both the efficiency
-ceiling (`Luck`) and the dividend (`Δ`); A-expected is the no-clairvoyance
-projection useful before results are in.
+ceiling (the Actual−M1 gap) and the dividend (`Δ`); A-expected is the
+no-clairvoyance projection useful before results are in.
 
 ## Roadmap
 

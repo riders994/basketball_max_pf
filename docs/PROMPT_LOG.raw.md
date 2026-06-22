@@ -19,3 +19,11 @@ are added automatically; don't edit them by hand.
 ## 2026-06-22T16:04:33-04:00
 
 > commit the raw log captures
+
+## 2026-06-22T16:09:28-04:00
+
+> push it
+
+## 2026-06-22T18:17:15-04:00
+
+> Merged, but just had a thought. I think Luck should be actual - M3, the scenario where both players are intelligent. Let's pull from primary and make a new round of changes

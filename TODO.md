@@ -5,6 +5,10 @@ design history and `CHANGELOG.md` for what shipped.
 
 ## Next release round
 
+- [ ] **Regenerate the season report artifacts** for the `Luck = Actual − M3`
+      redefinition. The committed `season_report.{txt,csv,md}` still carry the old
+      `Actual − M1` Luck column; regenerate on the box-score default path and
+      re-commit. (Needs a live Fantrax + basketball-reference run.)
 - [x] **Regenerate the season report artifacts** on the box-score default and
       re-commit them. Done in 1.1.0: `season_report.{txt,csv,md}` regenerated with
       the full Nash picture (M3 / M1-M3), replacing the stale Fantrax-estimator

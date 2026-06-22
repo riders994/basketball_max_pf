@@ -4,25 +4,26 @@ Aggregates per-period Δ results into a per-team season summary and renders it a
 a text table, CSV, or Markdown.
 
 These columns are the **A-expected** reading: ``mine_opt`` is the best lineup of
-season-to-date *projections*, not realized stats. So M1 is an *expected* ceiling,
-and ``Luck`` (Actual - M1) can be positive when a team outran its projections.
-A true lineup-management efficiency (realized-optimal vs realized-actual, always
->= actual) requires the A-hindsight variant; see docs/PROMPT_LOG.md.
+season-to-date *projections*, not realized stats. So M1 is an *expected* ceiling;
+under A-hindsight (realized stats) it instead satisfies M1 >= Actual always. See
+docs/PROMPT_LOG.md.
 
 Columns:
 - Actual: category points the team actually scored (sum of weekly results).
 - M1: projection-optimal lineup vs each opponent's actual line (sum).
 - M2: projection-optimal lineup vs each opponent's projection-optimum (sum).
 - Delta = M1 - M2: the opponent-mismanagement dividend.
-- Luck = Actual - M1: realized result minus expected ceiling (week/projection
-  variance; positive = overperformed expectation).
 
-With ``include_nash`` two more columns appear (per-period Nash mutual ceiling,
+With ``include_nash`` three more columns appear (per-period Nash mutual ceiling,
 ``engine.season_nash``; see docs/PROMPT_LOG.md):
 - M3: the mutual-ceiling score (sum) — both managers play their equilibrium
   lineup, so neither can exploit the other. Pure or mixed-strategy value alike.
 - M1-M3: the opponent-passivity dividend — how much of my exploitation ceiling
   M1 relied on the opponent *not* also optimizing (M1 >= M3, so this is >= 0).
+- Luck = Actual - M3: realized result vs the both-optimal equilibrium. Positive
+  = the team scored above the mutual ceiling (opponent passivity, or its own hot
+  week); negative = it underperformed even that ceiling. M3-relative, so it
+  appears only alongside the Nash columns.
 """
 from __future__ import annotations
 
@@ -51,7 +52,15 @@ class TeamSeason:
 
     @property
     def luck(self) -> float:
-        return self.actual_pf - self.m1_pf
+        """Realized result minus the both-optimal mutual ceiling M3.
+
+        Positive => the team scored more than the equilibrium in which *both*
+        managers play optimally — points banked from opponent passivity (or its
+        own realized over-performance), not a sustainable edge. Negative => it
+        underperformed even that mutual ceiling. M3-relative, so this is only
+        meaningful (and only shown) when ``m3_pf`` is set.
+        """
+        return self.actual_pf - (self.m3_pf or 0.0)
 
     @property
     def m1_minus_m3(self) -> float:
@@ -78,14 +87,15 @@ def _columns(rows: list[TeamSeason]) -> list[_Column]:
         _Column("M1", lambda r: f"{r.m1_pf:.1f}"),
         _Column("M2", lambda r: f"{r.m2_pf:.1f}"),
         _Column("Delta", lambda r: f"{r.delta:.1f}"),
-        _Column("Luck", lambda r: f"{r.luck:+.1f}"),
     ]
     if rows and rows[0].m3_pf is not None:
         # Keep the ceiling family together: M3 after M2, its dividend beside it.
+        # Luck (Actual - M3) is also M3-relative, so it rides with this group.
         cols[5:5] = [
             _Column("M3", lambda r: f"{r.m3_pf:.1f}"),
             _Column("M1-M3", lambda r: f"{r.m1_minus_m3:+.1f}"),
         ]
+        cols.append(_Column("Luck", lambda r: f"{r.luck:+.1f}"))
     return cols
 
 

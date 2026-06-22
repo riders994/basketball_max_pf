@@ -13,14 +13,10 @@ from max_pf.report import (
 
 
 def test_team_season_derived_metrics():
-    ts = TeamSeason("t", "Team", periods=10, actual_pf=40.0, m1_pf=50.0, m2_pf=44.0)
-    assert ts.delta == 6.0          # M1 - M2
-    assert ts.luck == -10.0         # Actual - M1 (underran its expected ceiling)
-
-
-def test_team_season_m1_minus_m3():
     ts = TeamSeason("t", "Team", periods=10, actual_pf=40.0, m1_pf=50.0, m2_pf=44.0, m3_pf=47.0)
+    assert ts.delta == 6.0          # M1 - M2
     assert ts.m1_minus_m3 == 3.0    # opponent-passivity dividend
+    assert ts.luck == -7.0          # Actual - M3 (fell short of the both-optimal equilibrium)
 
 
 def _rows():
@@ -31,14 +27,15 @@ def _rows():
 
 
 def test_render_csv_roundtrips():
+    # _rows() carries no m3_pf, so Luck (Actual - M3) is gated out with the Nash columns.
     parsed = list(csv.reader(io.StringIO(render_csv(_rows()))))
-    assert parsed[0] == ["Team", "GP", "Actual", "M1", "M2", "Delta", "Luck"]
+    assert parsed[0] == ["Team", "GP", "Actual", "M1", "M2", "Delta"]
     assert parsed[1][0] == "Alpha" and parsed[1][2] == "24.0"
 
 
 def test_render_table_and_markdown_contain_teams():
     table = render_table(_rows())
-    assert "Alpha" in table and "Beta" in table and "Luck" in table
+    assert "Alpha" in table and "Beta" in table
     md = render_markdown(_rows())
     assert md.startswith("| Team |") and "| Alpha |" in md
 
