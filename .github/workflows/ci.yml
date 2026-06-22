@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [primary]
+  pull_request:
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # dev pulls pytest + pyyaml; boxscores pulls beautifulsoup4 (test_box_bref).
+      # numpy/scipy are core dependencies and install automatically.
+      - run: pip install -e ".[dev,boxscores]"
+      - run: pytest -q
+
+  vendored-import:
+    name: vendored fantraxapi is self-contained
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # Core install ONLY (no extras): the package must import with no top-level
+      # `fantraxapi` present — the fork is vendored under max_pf._vendor.
+      - run: pip install .
+      - name: import with no top-level fantraxapi
+        run: |
+          python -c "
+          import importlib.util as u, sys
+          import max_pf.platforms.fantrax
+          assert u.find_spec('fantraxapi') is None, 'top-level fantraxapi installed; vendoring check is meaningless'
+          assert 'fantraxapi' not in sys.modules, 'adapter pulled in a top-level fantraxapi'
+          import max_pf._vendor.fantraxapi
+          print('OK: fantrax adapter imports; vendored fantraxapi self-contained')
+          "

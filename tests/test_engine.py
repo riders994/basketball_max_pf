@@ -124,17 +124,48 @@ def test_nash_converges_to_fixed_point():
     assert res.m3 == catwins(me.line, opp.line)
 
 
-def test_nash_detects_cycle_when_no_pure_equilibrium():
+def _cycle_platform():
     # Cyclic dominance over pts/reb/ast (a 4-cycle A>X>B>Y>A): best responses
     # chase each other forever, so there is no pure-strategy equilibrium.
     A = _cand("A", pts=2, reb=2, ast=0)
     B = _cand("B", pts=0, reb=2, ast=2)
     X = _cand("X", pts=1, reb=0, ast=3)
     Y = _cand("Y", pts=3, reb=1, ast=1)
-    plat = FakePlatform(
+    return FakePlatform(
         opp={("me", 1): "opp"},
         actuals={("me", 1): A.line, ("opp", 1): X.line},
         cands={("me", 1): [[A, B]], ("opp", 1): [[X, Y]]},
     )
-    res = nash_ceiling(plat, "me", 1, [Slot("Flx")], max_rounds=50)
+
+
+def test_nash_detects_cycle_when_no_pure_equilibrium():
+    res = nash_ceiling(_cycle_platform(), "me", 1, [Slot("Flx")], max_rounds=50)
     assert not res.converged
+    assert res.equilibrium == "mixed"
+
+
+def test_nash_cycle_resolves_to_mixed_strategy_value():
+    # The 4-cycle's payoff matrix (rows me=[A,B], cols opp=[X,Y]) is
+    # [[5, 4], [4, 5]] in category points: a matching-pennies game whose minimax
+    # value is 4.5 at the 50/50 mixture on each side. Stage 2 recovers it.
+    res = nash_ceiling(_cycle_platform(), "me", 1, [Slot("Flx")])
+    assert res.value == 4.5
+    assert res.m3_pf == 4.5
+    assert {round(w, 6) for _, w in res.mine_mix} == {0.5}
+    assert {round(w, 6) for _, w in res.theirs_mix} == {0.5}
+    # Each side's mixture has two lineups summing to a proper distribution.
+    assert abs(sum(w for _, w in res.mine_mix) - 1.0) < 1e-9
+    assert abs(sum(w for _, w in res.theirs_mix) - 1.0) < 1e-9
+
+
+def test_nash_pure_result_carries_value_equal_to_points_for():
+    me = _cand("M", pts=30, reb=10, ast=8)
+    opp = _cand("O", pts=20, reb=12, ast=4)
+    plat = FakePlatform(
+        opp={("me", 1): "opp"},
+        actuals={("me", 1): PlayerLine(), ("opp", 1): PlayerLine()},
+        cands={("me", 1): [[me]], ("opp", 1): [[opp]]},
+    )
+    res = nash_ceiling(plat, "me", 1, [Slot("Flx")])
+    assert res.equilibrium == "pure"
+    assert res.value == res.m3.points_for == res.m3_pf

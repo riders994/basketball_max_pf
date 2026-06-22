@@ -5,16 +5,19 @@ design history and `CHANGELOG.md` for what shipped.
 
 ## Next release round
 
-- [ ] **Regenerate the season report artifacts** on the box-score default and
-      re-commit them. The 1.0.0 release removed the previous `season_report.*`
-      files because they were generated on the old Fantrax-estimator path
-      (pre-dating exact A-expected on box scores) and were stale.
-- [ ] **Nash mutual ceiling, stage 2.** Mixed-strategy / minimax *value* via a
-      double-oracle LP for the ~20% of matchup periods where iterated best
-      response cycles (no pure equilibrium). Adds an LP dependency + a
-      payoff-matrix builder.
-- [ ] **Wire Nash M3 into the report.** Surface the mutual-ceiling split (and the
-      `M1 − M3` decomposition) as columns in the CSV/Markdown season report.
+- [x] **Regenerate the season report artifacts** on the box-score default and
+      re-commit them. Done in 1.1.0: `season_report.{txt,csv,md}` regenerated with
+      the full Nash picture (M3 / M1-M3), replacing the stale Fantrax-estimator
+      files the 1.0.0 release had removed.
+- [x] **Nash mutual ceiling, stage 2.** Mixed-strategy / minimax *value* via a
+      double-oracle LP for matchup periods where iterated best response cycles (no
+      pure equilibrium). Done: `engine._double_oracle` + `nash_lp.solve_zero_sum_game`
+      (scipy `linprog`); `NashResult` now carries `value` / `equilibrium` /
+      `mine_mix` / `theirs_mix`. Added numpy + scipy as dependencies.
+- [x] **Wire Nash M3 into the report.** Done: `M3` and `M1-M3` columns on by
+      default (the full picture every time) via `season_report(...)` / `run(...)` /
+      `max-pf`; opt out with `include_nash=False` / `nash=False` / `--no-nash`.
+      Renderers are now column-driven (`report._Column`).
 
 ## Packaging / infra
 

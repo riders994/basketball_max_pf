@@ -18,6 +18,11 @@ def test_team_season_derived_metrics():
     assert ts.luck == -10.0         # Actual - M1 (underran its expected ceiling)
 
 
+def test_team_season_m1_minus_m3():
+    ts = TeamSeason("t", "Team", periods=10, actual_pf=40.0, m1_pf=50.0, m2_pf=44.0, m3_pf=47.0)
+    assert ts.m1_minus_m3 == 3.0    # opponent-passivity dividend
+
+
 def _rows():
     return [
         TeamSeason("t1", "Alpha", 4, 24.0, 28.0, 25.0),
@@ -77,3 +82,23 @@ def test_season_report_sorted_by_actual():
     assert [r.name for r in rows] == ["Alpha", "Beta"]  # Alpha scored more, sorted first
     assert all(r.periods == 1 for r in rows)
     assert rows[0].m1_pf >= rows[0].actual_pf  # ceiling >= actual
+
+
+def test_season_report_omits_nash_columns_when_disabled():
+    rows = season_report(FakePlatform(), SLOTS, periods=[1], include_nash=False)
+    assert all(r.m3_pf is None for r in rows)
+    header = list(csv.reader(io.StringIO(render_csv(rows))))[0]
+    assert "M3" not in header and "M1-M3" not in header
+
+
+def test_season_report_includes_nash_columns_by_default():
+    rows = season_report(FakePlatform(), SLOTS, periods=[1])
+    assert all(r.m3_pf is not None for r in rows)
+    # M3 is the mutual ceiling; M1 (exploit opponent's actual) should not be below it.
+    assert all(r.m1_pf >= r.m3_pf for r in rows)
+
+    header = list(csv.reader(io.StringIO(render_csv(rows))))[0]
+    assert header == ["Team", "GP", "Actual", "M1", "M2", "M3", "M1-M3", "Delta", "Luck"]
+    md = render_markdown(rows)
+    assert "| M3 |" in md and "| M1-M3 |" in md
+    assert "M3" in render_table(rows)

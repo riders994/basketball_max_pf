@@ -31,6 +31,8 @@ avoiding the Nash infinite regress):
 | **M2** | catwins(`mine_opt`, `their_opt`) | the same lineup vs their best counter |
 | **Δ** | M1 − M2 | the **opponent-mismanagement dividend** — points banked purely because the opponent didn't optimize |
 | **Luck** | Actual − M1 | points left on the table (negative ⇒ you fell short of your own ceiling) |
+| **M3** | mutual ceiling | the two-player equilibrium value — both managers play optimally against each other (pure- or mixed-strategy). See [Roadmap](#roadmap). |
+| **M1 − M3** | opponent-passivity dividend | how much of M1 relied on the opponent *not* also optimizing (M1 ≥ M3, so ≥ 0) |
 
 FG% and FT% are aggregated correctly across a lineup via Σmakes / Σattempts
 (never by averaging percentages); TO is treated as lower-is-better.
@@ -85,10 +87,11 @@ pip install -e ".[boxscores]"   # add 'dev' for the test suite
 ```
 
 The Fantrax adapter works out of the box — its API client is vendored, so there
-is no VCS/URL dependency (and the package installs cleanly from PyPI). `boxscores`
-pulls beautifulsoup4 for the basketball-reference source; `yaml` adds YAML
-login-file support on the CLI (JSON works without it). (Per packaging convention, all
-version specifiers are `>=` for compatibility.)
+is no VCS/URL dependency (and the package installs cleanly from PyPI). numpy and
+scipy install automatically (scipy backs the Nash mutual-ceiling equilibrium
+solver). `boxscores` pulls beautifulsoup4 for the basketball-reference source;
+`yaml` adds YAML login-file support on the CLI (JSON works without it). (Per
+packaging convention, all version specifiers are `>=` for compatibility.)
 
 ## Usage
 
@@ -104,12 +107,15 @@ print(max_pf.render_table(rows))
 # Scope to one week or a selection, and pick methodology / objective:
 rows = max_pf.run(login, weeks="1-6", methodology="hindsight", objective="zscore")
 rows = max_pf.run(login, weeks=6)            # a single week
+rows = max_pf.run(login, nash=False)         # drop the M3 / M1−M3 columns for speed
 ```
 
 `weeks` accepts a single int, a list, or a spec string (`"5"`, `"1-6"`,
 `"1,2,5"`); `None` (the default) is the whole season to date. Box scores back
 both methodologies by default; pass `boxscores=False` for the no-extra-dependency
-Fantrax estimator (A-expected only).
+Fantrax estimator (A-expected only). The mutual ceiling — the **M3** / **M1 − M3**
+columns — is on by default for the full picture; pass `nash=False` (CLI:
+`--no-nash`) to skip the per-team equilibrium search for a quicker M1/M2-only report.
 
 **Command line** — point it at a JSON or YAML file holding the same login dict:
 
@@ -125,8 +131,7 @@ It prints the table and writes `<out>.csv` and `<out>.md`.
 
 Full-season run on the finished public league `wserh14rmbbpqtcg` ("Mao's Macho
 Mandarins", 2025-26 NBA, 16 teams × 24 periods), A-expected vs A-hindsight.
-(The committed sample reports were removed in 1.0.0 pending regeneration on the
-box-score default — see [`TODO.md`](TODO.md); reproduce with
+(See the committed `season_report.{txt,csv,md}` for the full table; reproduce with
 `python -m max_pf league.json [--methodology hindsight]`.)
 
 - **The ceiling invariant holds under hindsight.** M1 ≥ Actual for every team
@@ -163,12 +168,14 @@ projection useful before results are in.
   side's max-raw-output lineup (same league-wide population as B, but values
   players without scarcity weighting, so it chases volume); opponent-independent,
   catwins as a readout.
-- Nash "mutual ceiling" (two-player equilibrium): stage 1 done —
+- Nash "mutual ceiling" (two-player equilibrium) — **done** (both stages).
   `engine.nash_ceiling` runs iterated best response to the fixed point where each
-  lineup best-responds to the other (pure-strategy Nash), yielding **M3** = the
-  both-sides-optimal category split; it flags cycles (no pure equilibrium). On
-  the test league it converges in ~80% of periods.
+  lineup best-responds to the other, yielding the pure-strategy **M3** = the
+  both-sides-optimal category split (~80% of periods on the test league). For the
+  ~20% that cycle (no pure equilibrium), a **double-oracle** LP
+  (`engine._double_oracle` + `nash_lp.solve_zero_sum_game` over scipy `linprog`)
+  resolves M3 as the mixed-strategy minimax value. On by default; `--no-nash` skips it.
 
-Open items (Nash stage 2, M3 in the report, artifact regeneration, CI, more
-platforms) are tracked in [`TODO.md`](TODO.md). See
+Open items (artifact regeneration, swapping the vendored fantraxapi for a
+published one, more platforms) are tracked in [`TODO.md`](TODO.md). See
 [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md) for the complete design history.

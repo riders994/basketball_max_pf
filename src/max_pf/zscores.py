@@ -23,8 +23,9 @@ is used: the population is the valuation universe, not a draw from a larger one.
 """
 from __future__ import annotations
 
-import statistics
 from dataclasses import dataclass
+
+import numpy as np
 
 from .categories import BY_KEY, CATEGORY_KEYS, PERCENTAGE_KEYS
 from .models import PlayerLine
@@ -95,10 +96,15 @@ def build_model(population: list[PlayerLine]) -> ZScoreModel:
     if not population:
         raise ValueError("cannot build a z-score model from an empty population")
     league_pcts = _league_pcts(population)
-    values = {
-        key: [_raw_value(line, key, league_pcts) for line in population]
-        for key in CATEGORY_KEYS
-    }
-    mean = {key: statistics.fmean(vals) for key, vals in values.items()}
-    std = {key: statistics.pstdev(vals) for key, vals in values.items()}
+    # (n_players, 9) matrix of standardized raw quantities, one column per
+    # category. numpy computes the population mean/std across the whole roster in
+    # one pass (population std, ddof=0, matches statistics.pstdev).
+    raw = np.array(
+        [[_raw_value(line, key, league_pcts) for key in CATEGORY_KEYS] for line in population],
+        dtype=float,
+    )
+    means = raw.mean(axis=0)
+    stds = raw.std(axis=0)
+    mean = {key: float(means[i]) for i, key in enumerate(CATEGORY_KEYS)}
+    std = {key: float(stds[i]) for i, key in enumerate(CATEGORY_KEYS)}
     return ZScoreModel(league_pcts, mean, std)

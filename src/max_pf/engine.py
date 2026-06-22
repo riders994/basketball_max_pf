@@ -21,17 +21,19 @@ See docs/PROMPT_LOG.md.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from .categories import CATEGORY_KEYS
 from .metric import CategoryResult, DeltaResult, catwins, compute_delta
 from .models import PlayerLine
+from .nash_lp import solve_zero_sum_game
 from .optimize import (
     Candidate,
     Objective,
     Slot,
     best_response,
+    make_expected_catwins_objective,
     make_total_raw_objective,
     make_total_z_objective,
 )
@@ -112,31 +114,129 @@ def season_deltas(
 # --- Nash mutual ceiling (stage 1: iterated best response) --------------------
 
 
+# Per-period category points always total len(CATEGORY_KEYS) (ties split), so the
+# game is constant-sum and the mutual ceiling is a well-defined minimax value.
+# An oracle strategy is added only if it beats the restricted-game value by more
+# than this, so float wobble doesn't drive a spurious extra double-oracle round.
+_ORACLE_TOL = 1e-9
+
+
 @dataclass
 class NashResult:
-    """Outcome of the iterated best-response search for one matchup period.
+    """Outcome of the mutual-ceiling search for one matchup period.
 
-    ``converged`` is True when the dynamics reached a fixed point — a pure-strategy
-    Nash equilibrium where each lineup is a best response to the other (the mutual
-    ceiling). False means the best responses cycled (no pure equilibrium; the
-    mixed-strategy value needs stage 2) or the round cap was hit.
+    ``converged`` is True when iterated best response reached a fixed point — a
+    pure-strategy Nash equilibrium where each lineup best-responds to the other
+    (``equilibrium == "pure"``). False means the best responses cycle (no pure
+    equilibrium); stage 2 then resolves the ceiling as a **mixed-strategy** minimax
+    value via a double-oracle LP (``equilibrium == "mixed"``), and ``mine_mix`` /
+    ``theirs_mix`` carry the equilibrium mixtures.
+
+    ``value`` is the mutual-ceiling score in category points either way: the pure
+    equilibrium's ``m3.points_for``, or the mixed game's value. For a mixed result
+    ``mine`` / ``theirs`` / ``m3`` describe the modal (most-probable) lineup pair as
+    a representative readout; the value, not that pair, is the ceiling.
     """
 
     converged: bool
     rounds: int
-    mine: PlayerLine        # my equilibrium / terminal lineup line
+    mine: PlayerLine        # my equilibrium / modal lineup line
     theirs: PlayerLine      # opponent's
-    m3: CategoryResult      # catwins(mine, theirs) at the (terminal) state
+    m3: CategoryResult      # catwins(mine, theirs) at the (terminal/modal) state
+    value: float            # mutual-ceiling category points (pure: m3.points_for)
+    equilibrium: str = "pure"   # "pure" | "mixed"
+    mine_mix: list[tuple[PlayerLine, float]] = field(default_factory=list)
+    theirs_mix: list[tuple[PlayerLine, float]] = field(default_factory=list)
 
     @property
     def m3_pf(self) -> float:
-        return self.m3.points_for
+        return self.value
 
 
 def _line_key(line: PlayerLine) -> tuple[float, ...]:
     """Hashable identity of a line for fixed-point / cycle detection."""
     vals = line.category_values()
     return tuple(round(vals[k], 6) for k in CATEGORY_KEYS)
+
+
+def _contains(lines: list[PlayerLine], line: PlayerLine) -> bool:
+    key = _line_key(line)
+    return any(_line_key(existing) == key for existing in lines)
+
+
+def _pure_result(rounds: int, mine: PlayerLine, theirs: PlayerLine) -> NashResult:
+    res = catwins(mine, theirs)
+    return NashResult(True, rounds, mine, theirs, res, res.points_for, "pure")
+
+
+def _double_oracle(
+    my_cands: list[list[Candidate]],
+    opp_cands: list[list[Candidate]],
+    slots: list[Slot],
+    seed_mine: PlayerLine,
+    seed_their: PlayerLine,
+    max_iters: int = 100,
+) -> NashResult:
+    """Mixed-strategy mutual ceiling for a cycling matchup via double oracle.
+
+    Maintains restricted pure-strategy sets (lineups) for both sides, seeded from
+    the terminal best-response lines. Each round solves the restricted zero-sum
+    game for its value and mixtures, then grows the sets with a best response to
+    the opponent's mixture (the row/column *oracles*, reusing the daily optimizer
+    with an expected-catwins objective). When neither oracle can beat the current
+    value, the restricted game's equilibrium is an equilibrium of the full game and
+    its value is the mutual ceiling (M3).
+    """
+    my_lines = [seed_mine]
+    opp_lines = [seed_their]
+
+    for _ in range(max_iters):
+        payoff = [[catwins(a, b).points_for for b in opp_lines] for a in my_lines]
+        sol = solve_zero_sum_game(payoff)
+        x, y = sol.row_strategy, sol.col_strategy
+
+        # Row oracle: my best response to the opponent's mixture y.
+        br_mine = best_response(
+            my_cands, slots, opp_lines[0], objective=make_expected_catwins_objective(opp_lines, y)
+        ).line
+        row_ev = sum(w * catwins(br_mine, t).points_for for t, w in zip(opp_lines, y))
+
+        # Column oracle: opponent's best response to my mixture x. It maximizes its
+        # own points (the rest of the period total), i.e. minimizes my expected points.
+        br_their = best_response(
+            opp_cands, slots, my_lines[0], objective=make_expected_catwins_objective(my_lines, x)
+        ).line
+        my_ev_vs_their = sum(w * catwins(a, br_their).points_for for a, w in zip(my_lines, x))
+
+        grew = False
+        if row_ev > sol.value + _ORACLE_TOL and not _contains(my_lines, br_mine):
+            my_lines.append(br_mine)
+            grew = True
+        if my_ev_vs_their < sol.value - _ORACLE_TOL and not _contains(opp_lines, br_their):
+            opp_lines.append(br_their)
+            grew = True
+        if not grew:
+            break
+
+    # Re-solve over the final sets so the reported mixtures/value are consistent
+    # with them (the last loop iteration may have appended a strategy).
+    payoff = [[catwins(a, b).points_for for b in opp_lines] for a in my_lines]
+    sol = solve_zero_sum_game(payoff)
+    mine_mix = list(zip(my_lines, sol.row_strategy))
+    theirs_mix = list(zip(opp_lines, sol.col_strategy))
+    mine = max(mine_mix, key=lambda p: p[1])[0]
+    theirs = max(theirs_mix, key=lambda p: p[1])[0]
+    return NashResult(
+        converged=False,
+        rounds=len(my_lines) + len(opp_lines) - 2,
+        mine=mine,
+        theirs=theirs,
+        m3=catwins(mine, theirs),
+        value=sol.value,
+        equilibrium="mixed",
+        mine_mix=mine_mix,
+        theirs_mix=theirs_mix,
+    )
 
 
 def nash_ceiling(
@@ -146,6 +246,7 @@ def nash_ceiling(
     slots: list[Slot],
     methodology: str = "expected",
     max_rounds: int = 50,
+    max_oracle_iters: int = 100,
 ) -> NashResult | None:
     """Iterated best response toward the mutual (Nash) ceiling for one period.
 
@@ -153,9 +254,11 @@ def nash_ceiling(
     lineup, seeded from the actual lineups. A fixed point — where each lineup is a
     best response to the other — is a pure-strategy Nash equilibrium: the score
     when both manage perfectly against each other. If the dynamics revisit a state
-    the best responses cycle (no pure equilibrium), reported as not converged.
-    Returns ``None`` for a bye. Always uses the catwins objective (the game's
-    payoff); Objectives B/C are opponent-independent and have no equilibrium.
+    the best responses cycle (no pure equilibrium); the ceiling is then the
+    mixed-strategy minimax value, resolved by a double-oracle LP (stage 2) and
+    reported with ``converged=False``, ``equilibrium="mixed"``. Returns ``None``
+    for a bye. Always uses the catwins objective (the game's payoff); Objectives
+    B/C are opponent-independent and have no equilibrium.
     """
     opponent = platform.matchup_opponent(team_id, period)
     if opponent is None:
@@ -172,14 +275,15 @@ def nash_ceiling(
         new_their = best_response(opp_cands, slots, mine).line
         # Fixed point: each current lineup already best-responds to the other.
         if _line_key(new_mine) == _line_key(mine) and _line_key(new_their) == _line_key(theirs):
-            return NashResult(True, r, mine, theirs, catwins(mine, theirs))
+            return _pure_result(r, mine, theirs)
         state = (_line_key(mine), _line_key(theirs))
-        if state in seen:  # revisited a state -> deterministic cycle
-            return NashResult(False, r, mine, theirs, catwins(mine, theirs))
+        if state in seen:  # revisited a state -> no pure equilibrium
+            return _double_oracle(my_cands, opp_cands, slots, mine, theirs, max_oracle_iters)
         seen.add(state)
         mine, theirs = new_mine, new_their
 
-    return NashResult(False, max_rounds, mine, theirs, catwins(mine, theirs))
+    # Round cap hit without a fixed point: also resolve the mixed-strategy value.
+    return _double_oracle(my_cands, opp_cands, slots, mine, theirs, max_oracle_iters)
 
 
 def season_nash(

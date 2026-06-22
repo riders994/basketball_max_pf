@@ -38,9 +38,12 @@ def category_outcome(a: float, b: float, lower_is_better: bool) -> int:
     return 1 if a_better else -1
 
 
-def catwins(a: PlayerLine, b: PlayerLine) -> CategoryResult:
-    """Score team A's category line against team B's across all 9 categories."""
-    a_vals, b_vals = a.category_values(), b.category_values()
+def catwins_from_values(a_vals: dict[str, float], b_vals: dict[str, float]) -> CategoryResult:
+    """``catwins`` on already-extracted category-value dicts.
+
+    Lets hot callers (the optimizer's inner loop) build each line's
+    ``category_values()`` once and reuse it, instead of rebuilding it per call.
+    """
     wins = losses = draws = 0
     for cat in CATEGORIES:
         outcome = category_outcome(a_vals[cat.key], b_vals[cat.key], cat.lower_is_better)
@@ -51,6 +54,11 @@ def catwins(a: PlayerLine, b: PlayerLine) -> CategoryResult:
         else:
             draws += 1
     return CategoryResult(wins, losses, draws)
+
+
+def catwins(a: PlayerLine, b: PlayerLine) -> CategoryResult:
+    """Score team A's category line against team B's across all 9 categories."""
+    return catwins_from_values(a.category_values(), b.category_values())
 
 
 @dataclass(frozen=True)
