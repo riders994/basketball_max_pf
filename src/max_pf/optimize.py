@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from .categories import CATEGORIES
-from .metric import CategoryResult, catwins
+from .metric import CategoryResult, catwins, catwins_from_values
 from .models import PlayerLine, aggregate
 
 # An objective scores a started selection (per-day lists of Candidate) against
@@ -111,8 +111,8 @@ def objective_catwins(started: list[list["Candidate"]], target: PlayerLine) -> t
     started selection is aggregated and compared to ``target``.
     """
     line = _aggregate_started(started)
-    res = catwins(line, target)
     mine, theirs = line.category_values(), target.category_values()
+    res = catwins_from_values(mine, theirs)
     margin = 0.0
     for cat in CATEGORIES:
         diff = mine[cat.key] - theirs[cat.key]
@@ -120,6 +120,39 @@ def objective_catwins(started: list[list["Candidate"]], target: PlayerLine) -> t
             diff = -diff
         margin += diff / (abs(theirs[cat.key]) or 1.0)
     return res.points_for, margin
+
+
+def make_expected_catwins_objective(
+    targets: list[PlayerLine], weights: list[float]
+) -> Objective:
+    """Objective A against a *mixed* opponent: maximize expected category points.
+
+    The Nash double-oracle (engine stage 2) best-responds not to a single opponent
+    line but to a probability distribution over opponent lineups. This scores a
+    started selection by its weighted-average :func:`catwins` points-for across the
+    ``targets`` (with matching ``weights``), tie-broken by the same weighted
+    normalized margin as :func:`objective_catwins` so the local search keeps a
+    gradient. The ``target`` argument is ignored (the mixture is closed over).
+    """
+
+    # The mixture is fixed for the whole search, so extract each target's category
+    # values once here rather than rebuilding them on every neighbor evaluation.
+    target_vals = [t.category_values() for t in targets]
+
+    def objective(started: list[list["Candidate"]], _target: PlayerLine) -> tuple[float, float]:
+        mine = _aggregate_started(started).category_values()
+        ev = 0.0
+        margin = 0.0
+        for theirs, w in zip(target_vals, weights):
+            ev += w * catwins_from_values(mine, theirs).points_for
+            for cat in CATEGORIES:
+                diff = mine[cat.key] - theirs[cat.key]
+                if cat.lower_is_better:
+                    diff = -diff
+                margin += w * diff / (abs(theirs[cat.key]) or 1.0)
+        return ev, margin
+
+    return objective
 
 
 def _value_objective(value_fn: Callable[[PlayerLine], float]) -> Objective:

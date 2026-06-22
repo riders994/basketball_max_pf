@@ -27,8 +27,12 @@ classifiers = [
 # requests is required at runtime: the vendored fantraxapi adapter and the
 # basketball-reference client both use it. The Fantrax fork itself is vendored
 # (src/max_pf/_vendor) so there is no VCS/URL dependency to upset PyPI.
+# numpy/scipy back the Nash mutual-ceiling stage-2 double-oracle: scipy.optimize
+# .linprog solves the zero-sum matrix game for cycling matchup periods.
 dependencies = [
     "requests>=2.28",
+    "numpy>=1.24",
+    "scipy>=1.10",
 ]
 
 [project.optional-dependencies]
