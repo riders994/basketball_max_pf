@@ -6,6 +6,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
+## [Unreleased]
+
+### Added
+
+- **Nash mutual ceiling, stage 2 (mixed-strategy value).** Matchup periods whose
+  iterated best responses cycle (no pure-strategy equilibrium) are now resolved to
+  their mixed-strategy minimax *value* via a double-oracle: `engine._double_oracle`
+  grows restricted lineup sets with expected-catwins best responses (new
+  `optimize.make_expected_catwins_objective`) and solves the restricted zero-sum
+  game with `nash_lp.solve_zero_sum_game` (an exact LP solver over
+  `scipy.optimize.linprog`). `NashResult` gains `value` (the mutual ceiling in
+  category points for both pure and mixed periods), `equilibrium` (`"pure"` /
+  `"mixed"`), and the `mine_mix` / `theirs_mix` equilibrium mixtures; `m3_pf` now
+  returns `value`.
+- **Nash M3 in the season report.** The report now carries two more columns by
+  default — the full picture every time: **M3** (the mutual-ceiling score, summed)
+  and **M1-M3** (the opponent-passivity dividend — how much of the exploitation
+  ceiling relied on the opponent not also optimizing). Pass `nash=False` /
+  `max-pf --no-nash` (or `season_report(..., include_nash=False)`) to skip the
+  per-team mutual-ceiling search for a quicker M1/M2-only report. The three
+  renderers are now column-driven, so the columns are defined in one place.
+
+### Changed
+
+- Added **numpy** and **scipy** as runtime dependencies (the stage-2 LP).
+- `zscores.build_model` now computes the population mean/std with numpy
+  (`statistics.fmean`/`pstdev` dropped), a single vectorized pass over the whole
+  roster — the genuine population-scale numeric op.
+
+### Performance
+
+- Optimizer inner loop: `objective_catwins` and `make_expected_catwins_objective`
+  no longer rebuild `category_values()` dicts redundantly. Each line's values are
+  built once per evaluation (via new `metric.catwins_from_values`), and the fixed
+  opponent mixture's values are hoisted out of the per-neighbor loop. ~1.3× faster
+  on the double-oracle objective path, identical results. (numpy was deliberately
+  *not* used for the 9-category comparisons — array overhead regresses on inputs
+  that small; the win is eliminating redundant work.)
+
 ## [1.0.0] - 2026-06-18
 
 First public release. Computes the "max points for" metric for 9-category

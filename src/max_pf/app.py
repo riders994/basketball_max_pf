@@ -108,6 +108,7 @@ def run(
     methodology: str = "expected",
     objective: str = "catwins",
     boxscores: bool = True,
+    nash: bool = True,
     cache_dir: str | None = None,
 ) -> list[TeamSeason]:
     """Build the platform from ``login`` and return the season report rows.
@@ -119,6 +120,10 @@ def run(
         objective: ``"catwins"`` (A), ``"zscore"`` (B), or ``"raw"`` (C).
         boxscores: attach the basketball-reference source (exact stats); set
             False to use the platform's built-in estimator (expected only).
+        nash: compute the Nash mutual ceiling (adds the M3 / M1-M3 columns); on by
+            default for the full picture. Set False to skip it for a quicker report
+            — it runs iterated best response (and a double-oracle LP for cycling
+            weeks) per team.
         cache_dir: override the box-score on-disk cache location.
 
     Returns the per-team :class:`~max_pf.report.TeamSeason` rows, sorted by actual
@@ -133,5 +138,5 @@ def run(
     slots = platform.active_slots()
     return season_report(
         platform, slots, periods=parse_weeks(weeks),
-        methodology=methodology, objective=objective,
+        methodology=methodology, objective=objective, include_nash=nash,
     )
