@@ -6,7 +6,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
-## [Unreleased]
+## [2.0.0] - 2026-06-22
+
+Major bump: the report's `Luck` column changes meaning and the `M1-M3` column /
+`TeamSeason.m1_minus_m3` property are renamed — see **Changed** below.
 
 ### Changed
 
@@ -100,4 +103,6 @@ head-to-head fantasy basketball.
 - Installable package (`src/` layout, hatchling) with `boxscores` and `yaml`
   extras; 52 unit tests; live-validated against a finished public league.
 
+[2.0.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v2.0.0
+[1.1.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v1.1.0
 [1.0.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v1.0.0

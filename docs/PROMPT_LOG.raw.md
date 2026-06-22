@@ -43,3 +43,7 @@ are added automatically; don't edit them by hand.
 ## 2026-06-22T18:34:32-04:00
 
 > I want to do a refactor of the testing. Go through and make sure there are no redundant or excessive tests
+
+## 2026-06-22T18:38:36-04:00
+
+> Let's update the version and get ready for the next release
