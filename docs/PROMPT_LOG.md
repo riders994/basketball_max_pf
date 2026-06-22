@@ -420,3 +420,39 @@ League: "Mao's Macho Mandarins", 2025-26 NBA, 16 teams, 158 daily scoring dates,
   - README: Findings no longer links the deleted artifacts (points to TODO.md + the CLI); Roadmap trimmed (dropped the stale artifact note + a duplicate Nash bullet) and points open work to TODO.md.
   - **Verified the wheel**: `max_pf-1.0.0`, author-email set, 9 classifiers, 4 Project-URLs, `max-pf` console_scripts entry point, 19 vendored files shipped, **no `@ url` in Requires-Dist** (PyPI-clean). 52 tests pass.
 - Branch prepped for merge (committed + pushed to `initial_dev`); **git tag `v1.0.0` intentionally NOT created** — the user will tag after merging to `primary` (the CHANGELOG/release URL reference `v1.0.0`).
+
+---
+
+### Backfill note — Prompts 34–36 (2026-06-22)
+
+Entries 34–36 below were **reconstructed from git history** (commit messages + diffs), not captured verbatim. The log is maintained by hand, and the convention lapsed after the v1.0.0 release prep (Prompt 33) — the work that became commits `49eab33`, `0c9d177`, `a3424fc`, `af352d4` never got logged at the time. The prompt wording here is an approximation of intent; the response notes are exact (taken from the commits). A `UserPromptSubmit` hook (`scripts/log_prompt.py` → `docs/PROMPT_LOG.raw.md`) was added alongside this backfill so raw prompts are now captured automatically and this gap can't recur.
+
+## Prompt 34 — 2026-06-22 *(reconstructed)*
+
+> Start the deferred Nash stage 2 — the mixed-strategy / minimax value for the cycling periods, via the double-oracle LP.
+
+*Response notes:*
+- Built the **Nash mutual-ceiling capstone, stage 2 (double-oracle mixed-strategy value)** — the piece deferred at Prompt 30 for the ~20% of matchup periods with no pure-strategy equilibrium (the cyclers). Commit `49eab33`.
+- `engine._double_oracle` grows restricted lineup sets for both sides via **expected-catwins best responses** (`optimize.make_expected_catwins_objective`) and solves the restricted zero-sum game with `nash_lp.solve_zero_sum_game` — an **exact LP over `scipy.optimize.linprog`** (new `nash_lp.py`). Iterates until neither oracle can add a beneficial pure response → the minimax value of the full game.
+- `NashResult` gained `value`, `equilibrium`, and the `mine_mix` / `theirs_mix` mixed strategies; `metric.m3_pf` now returns the mixed-strategy `value` for cyclers (pure M3 unchanged where an equilibrium exists).
+- **Added `numpy` + `scipy` as runtime deps** (consistent with the standing "dependency minimalism is not a hard rule" position — the LP is not worth hand-rolling), plus a **CI workflow** (`.github/workflows/ci.yml`).
+- Tests: `tests/test_nash_lp.py` (zero-sum LP value/strategies) + engine double-oracle wiring on the hand-built cyclic-dominance fixture from Prompt 30. Suite extended (`test_engine` + `test_nash_lp`).
+
+## Prompt 35 — 2026-06-22 *(reconstructed)*
+
+> Surface M3 in the season report, on by default — show the full mutual-ceiling picture every run.
+
+*Response notes:*
+- **Surfaced Nash M3 in the season report, on by default** (commits `0c9d177` + the artifact regen `a3424fc`).
+- Two new columns added by default: **M3** (the mutual-ceiling score, summed) and **M1−M3** (the opponent-passivity dividend — what's earned specifically because the opponent was beatable vs a perfectly-playing one). `nash=False` / `max-pf --no-nash` / `season_report(..., include_nash=False)` skips the per-team mutual-ceiling search for a quicker M1/M2-only report.
+- Refactored the three renderers (text/CSV/Markdown) to be **column-driven** — columns now defined in one place — so adding M3/M1−M3 touched a single definition. Updated `scripts/_gen_report.py`, README, TODO, `__main__`, `app`.
+- **Regenerated `season_report.{txt,csv,md}`** on the box-score default path, now carrying the M3 / M1−M3 columns (`a3424fc`) — these are the artifacts that had been dropped at the v1.0.0 prep (Prompt 33) as stale; they're current again.
+- Tests: `test_report` extended for the nash columns + the include_nash toggle.
+
+## Prompt 36 — 2026-06-22 *(reconstructed)*
+
+> Bump the version to 1.1.0.
+
+*Response notes:*
+- **Bumped version `1.0.0` → `1.1.0`** (commit `af352d4`), releasing the Nash stage-2 / M3-by-default work. Cut the CHANGELOG `[Unreleased]` section to `[1.1.0] - 2026-06-22`, and **synced `__init__.__version__`** (was stale at `0.0.1`) with `pyproject`.
+- Per the standing "quick cleanup is part of version bumps" convention, folded a quick tidy into the bump commit: dropped the unused `engine._TOTAL_POINTS` constant (and reworded the comments that referenced it); refreshed the README "Findings" note and closed the TODO artifact-regeneration item (the `season_report.*` artifacts are now regenerated + committed, not pending).
