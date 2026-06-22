@@ -6,7 +6,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
-## [Unreleased]
+## [1.1.0] - 2026-06-22
 
 ### Added
 

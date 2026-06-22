@@ -114,9 +114,8 @@ def season_deltas(
 # --- Nash mutual ceiling (stage 1: iterated best response) --------------------
 
 
-# Per-period category points always total this (ties split), so the game is
-# constant-sum and the mutual ceiling is a well-defined minimax value.
-_TOTAL_POINTS = float(len(CATEGORY_KEYS))
+# Per-period category points always total len(CATEGORY_KEYS) (ties split), so the
+# game is constant-sum and the mutual ceiling is a well-defined minimax value.
 # An oracle strategy is added only if it beats the restricted-game value by more
 # than this, so float wobble doesn't drive a spurious extra double-oracle round.
 _ORACLE_TOL = 1e-9
@@ -203,7 +202,7 @@ def _double_oracle(
         row_ev = sum(w * catwins(br_mine, t).points_for for t, w in zip(opp_lines, y))
 
         # Column oracle: opponent's best response to my mixture x. It maximizes its
-        # own points (= _TOTAL_POINTS − mine), i.e. minimizes my expected points.
+        # own points (the rest of the period total), i.e. minimizes my expected points.
         br_their = best_response(
             opp_cands, slots, my_lines[0], objective=make_expected_catwins_objective(my_lines, x)
         ).line

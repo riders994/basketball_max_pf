@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "max-pf"
-version = "1.0.0"
+version = "1.1.0"
 description = "Methodology + tooling to compute the 'max points for' metric for 9-cat fantasy basketball leagues."
 readme = "README.md"
 license = { file = "LICENSE" }

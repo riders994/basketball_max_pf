@@ -131,8 +131,7 @@ It prints the table and writes `<out>.csv` and `<out>.md`.
 
 Full-season run on the finished public league `wserh14rmbbpqtcg` ("Mao's Macho
 Mandarins", 2025-26 NBA, 16 teams × 24 periods), A-expected vs A-hindsight.
-(The committed sample reports were removed in 1.0.0 pending regeneration on the
-box-score default — see [`TODO.md`](TODO.md); reproduce with
+(See the committed `season_report.{txt,csv,md}` for the full table; reproduce with
 `python -m max_pf league.json [--methodology hindsight]`.)
 
 - **The ceiling invariant holds under hindsight.** M1 ≥ Actual for every team

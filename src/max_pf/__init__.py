@@ -12,7 +12,7 @@ from .metric import CategoryResult, DeltaResult, catwins, compute_delta
 from .models import PlayerDay, PlayerLine, RosterDay, aggregate
 from .report import TeamSeason, render_csv, render_markdown, render_table
 
-__version__ = "0.0.1"
+__version__ = "1.1.0"
 
 __all__ = [
     # entry point

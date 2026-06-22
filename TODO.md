@@ -5,10 +5,10 @@ design history and `CHANGELOG.md` for what shipped.
 
 ## Next release round
 
-- [ ] **Regenerate the season report artifacts** on the box-score default and
-      re-commit them. The 1.0.0 release removed the previous `season_report.*`
-      files because they were generated on the old Fantrax-estimator path
-      (pre-dating exact A-expected on box scores) and were stale.
+- [x] **Regenerate the season report artifacts** on the box-score default and
+      re-commit them. Done in 1.1.0: `season_report.{txt,csv,md}` regenerated with
+      the full Nash picture (M3 / M1-M3), replacing the stale Fantrax-estimator
+      files the 1.0.0 release had removed.
 - [x] **Nash mutual ceiling, stage 2.** Mixed-strategy / minimax *value* via a
       double-oracle LP for matchup periods where iterated best response cycles (no
       pure equilibrium). Done: `engine._double_oracle` + `nash_lp.solve_zero_sum_game`
