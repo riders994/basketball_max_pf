@@ -32,7 +32,7 @@ avoiding the Nash infinite regress):
 | **Δ** | M1 − M2 | the **opponent-mismanagement dividend** — points banked purely because the opponent didn't optimize |
 | **Potential** | Actual − M1 | realized result vs your **exploitation ceiling** — points left on the table against the opponent's actual play (≤ 0 under hindsight, where M1 ≥ Actual). Shown in every report. |
 | **M3** | mutual ceiling | the two-player equilibrium value — both managers play optimally against each other (pure- or mixed-strategy). See [Roadmap](#roadmap). |
-| **M1 − M3** | opponent-passivity dividend | how much of M1 relied on the opponent *not* also optimizing (M1 ≥ M3, so ≥ 0) |
+| **Passivity** | M1 − M3 | the **opponent-passivity dividend** — how much of M1 relied on the opponent *not* also optimizing (M1 ≥ M3, so ≥ 0) |
 | **Anticipation** | M3 − M2 | the swing from the decoupled both-optimize estimate (M2, each side aimed at the other's actual) to the true equilibrium (M3) — the value of mutual strategic anticipation (usually positive). Shown with the Nash columns. |
 | **Luck** | Actual − M3 | realized result vs the both-optimal equilibrium — positive ⇒ you scored above the mutual ceiling (opponent passivity, or a hot week); negative ⇒ below it. Shown with the Nash columns. |
 
@@ -107,13 +107,13 @@ print(max_pf.render_table(rows))
 # Scope to one week or a selection, and pick methodology / objective:
 rows = max_pf.run(login, weeks="1-6", methodology="hindsight", objective="zscore")
 rows = max_pf.run(login, weeks=6)            # a single week
-rows = max_pf.run(login, nash=False)         # drop the M3 / M1−M3 columns for speed
+rows = max_pf.run(login, nash=False)         # drop the M3 / Passivity columns for speed
 ```
 
 `weeks` accepts a single int, a list, or a spec string (`"5"`, `"1-6"`,
 `"1,2,5"`); `None` (the default) is the whole season to date. Box scores back
 both methodologies by default; pass `boxscores=False` for the no-extra-dependency
-Fantrax estimator (A-expected only). The mutual ceiling — the **M3** / **M1 − M3**
+Fantrax estimator (A-expected only). The mutual ceiling — the **M3** / **Passivity**
 columns — is on by default for the full picture; pass `nash=False` (CLI:
 `--no-nash`) to skip the per-team equilibrium search for a quicker M1/M2-only report.
 

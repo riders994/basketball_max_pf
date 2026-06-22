@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-boxscores", action="store_true",
                         help="use the platform's built-in estimator instead of box scores (expected only)")
     parser.add_argument("--no-nash", action="store_true",
-                        help="skip the Nash mutual ceiling (the M3 / M1-M3 columns, on by default) "
+                        help="skip the Nash mutual ceiling (the M3 / Passivity columns, on by default) "
                              "for a quicker M1/M2-only report")
     args = parser.parse_args(argv)
 

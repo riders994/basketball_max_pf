@@ -20,8 +20,9 @@ With ``include_nash`` four more columns appear (per-period Nash mutual ceiling,
 ``engine.season_nash``; see docs/PROMPT_LOG.md):
 - M3: the mutual-ceiling score (sum) — both managers play their equilibrium
   lineup, so neither can exploit the other. Pure or mixed-strategy value alike.
-- M1-M3: the opponent-passivity dividend — how much of my exploitation ceiling
-  M1 relied on the opponent *not* also optimizing (M1 >= M3, so this is >= 0).
+- Passivity = M1 - M3: the opponent-passivity dividend — how much of my
+  exploitation ceiling M1 relied on the opponent *not* also optimizing
+  (M1 >= M3, so this is >= 0).
 - Anticipation = M3 - M2: the swing from the decoupled both-optimize estimate
   (M2, each side aimed at the other's actual) to the true equilibrium (M3) — the
   value of mutual strategic anticipation. Usually positive, not guaranteed.
@@ -91,8 +92,8 @@ class TeamSeason:
         return self.actual_pf - (self.m3_pf or 0.0)
 
     @property
-    def m1_minus_m3(self) -> float:
-        """Opponent-passivity dividend (only meaningful when ``m3_pf`` is set)."""
+    def passivity(self) -> float:
+        """Opponent-passivity dividend M1 - M3 (only meaningful when ``m3_pf`` is set)."""
         return self.m1_pf - (self.m3_pf or 0.0)
 
 
@@ -119,11 +120,11 @@ def _columns(rows: list[TeamSeason]) -> list[_Column]:
     ]
     if rows and rows[0].m3_pf is not None:
         # Keep the ceiling family together: M3 after M2, its M3-relative dividends
-        # (M1-M3, Anticipation) beside it. Luck (Actual - M3) is M3-relative too,
-        # appended so it sits next to Potential (the Actual-M1 sibling) at the end.
+        # (Passivity, Anticipation) beside it. Luck (Actual - M3) is M3-relative
+        # too, appended so it sits next to Potential (the Actual-M1 sibling) at the end.
         cols[5:5] = [
             _Column("M3", lambda r: f"{r.m3_pf:.1f}"),
-            _Column("M1-M3", lambda r: f"{r.m1_minus_m3:+.1f}"),
+            _Column("Passivity", lambda r: f"{r.passivity:+.1f}"),
             _Column("Anticipation", lambda r: f"{r.anticipation:+.1f}"),
         ]
         cols.append(_Column("Luck", lambda r: f"{r.luck:+.1f}"))
@@ -157,7 +158,7 @@ def season_report(
     """Compute the season summary for every team, sorted by actual points for.
 
     ``include_nash`` runs the Nash mutual-ceiling search per team and surfaces the
-    M3 / M1-M3 columns — the full picture, and on by default. It is markedly more
+    M3 / Passivity columns — the full picture, and on by default. It is markedly more
     expensive (iterated best response, plus a double-oracle LP for cycling weeks),
     so pass ``include_nash=False`` to skip it for a quicker, M1/M2-only report.
     """

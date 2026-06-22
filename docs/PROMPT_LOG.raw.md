@@ -31,3 +31,11 @@ are added automatically; don't edit them by hand.
 ## 2026-06-22T18:23:22-04:00
 
 >  The original luck metric (Actual - M1) should be renamed Potential. I want another metric for M3 - M2. What do you think it should be?
+
+## 2026-06-22T18:31:03-04:00
+
+> Sure
+
+## 2026-06-22T18:31:48-04:00
+
+> Rename M1-M3 to Passivity

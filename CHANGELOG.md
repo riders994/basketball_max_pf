@@ -16,6 +16,8 @@ Planned work is tracked in [TODO.md](TODO.md).
   Positive Luck means the team scored above that equilibrium (opponent passivity
   or a hot week); negative means it fell short of it. Because Luck now depends on
   M3, the column is **only shown alongside the Nash columns** (`include_nash`).
+- **Renamed the `M1-M3` column to `Passivity`** (the opponent-passivity dividend);
+  the `TeamSeason.m1_minus_m3` property is now `TeamSeason.passivity`.
 
 ### Added
 

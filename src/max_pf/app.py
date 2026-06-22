@@ -120,7 +120,7 @@ def run(
         objective: ``"catwins"`` (A), ``"zscore"`` (B), or ``"raw"`` (C).
         boxscores: attach the basketball-reference source (exact stats); set
             False to use the platform's built-in estimator (expected only).
-        nash: compute the Nash mutual ceiling (adds the M3 / M1-M3 columns); on by
+        nash: compute the Nash mutual ceiling (adds the M3 / Passivity columns); on by
             default for the full picture. Set False to skip it for a quicker report
             — it runs iterated best response (and a double-oracle LP for cycling
             weeks) per team.

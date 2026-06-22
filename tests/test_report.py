@@ -16,7 +16,7 @@ def test_team_season_derived_metrics():
     ts = TeamSeason("t", "Team", periods=10, actual_pf=40.0, m1_pf=50.0, m2_pf=44.0, m3_pf=47.0)
     assert ts.delta == 6.0           # M1 - M2
     assert ts.potential == -10.0     # Actual - M1 (left on the table vs exploitation ceiling)
-    assert ts.m1_minus_m3 == 3.0     # opponent-passivity dividend
+    assert ts.passivity == 3.0       # M1 - M3 (opponent-passivity dividend)
     assert ts.anticipation == 3.0    # M3 - M2 (decoupled estimate -> equilibrium)
     assert ts.luck == -7.0           # Actual - M3 (fell short of the both-optimal equilibrium)
 
@@ -29,7 +29,7 @@ def _rows():
 
 
 def test_render_csv_roundtrips():
-    # _rows() carries no m3_pf, so the M3-relative columns (M3, M1-M3, Anticipation,
+    # _rows() carries no m3_pf, so the M3-relative columns (M3, Passivity, Anticipation,
     # Luck) are gated out; Potential (Actual - M1) is M1-only, so it stays.
     parsed = list(csv.reader(io.StringIO(render_csv(_rows()))))
     assert parsed[0] == ["Team", "GP", "Actual", "M1", "M2", "Delta", "Potential"]
@@ -88,7 +88,7 @@ def test_season_report_omits_nash_columns_when_disabled():
     rows = season_report(FakePlatform(), SLOTS, periods=[1], include_nash=False)
     assert all(r.m3_pf is None for r in rows)
     header = list(csv.reader(io.StringIO(render_csv(rows))))[0]
-    assert "M3" not in header and "M1-M3" not in header and "Anticipation" not in header
+    assert "M3" not in header and "Passivity" not in header and "Anticipation" not in header
     assert "Luck" not in header        # Actual - M3, gated out
     assert "Potential" in header       # Actual - M1, always shown
 
@@ -100,8 +100,8 @@ def test_season_report_includes_nash_columns_by_default():
     assert all(r.m1_pf >= r.m3_pf for r in rows)
 
     header = list(csv.reader(io.StringIO(render_csv(rows))))[0]
-    assert header == ["Team", "GP", "Actual", "M1", "M2", "M3", "M1-M3",
+    assert header == ["Team", "GP", "Actual", "M1", "M2", "M3", "Passivity",
                       "Anticipation", "Delta", "Potential", "Luck"]
     md = render_markdown(rows)
-    assert "| M3 |" in md and "| M1-M3 |" in md and "| Anticipation |" in md
+    assert "| M3 |" in md and "| Passivity |" in md and "| Anticipation |" in md
     assert "M3" in render_table(rows)
