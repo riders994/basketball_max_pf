@@ -5,11 +5,11 @@ design history and `CHANGELOG.md` for what shipped.
 
 ## Next release round
 
-- [ ] **Regenerate the season report artifacts** for the reworked Luck family.
-      The committed `season_report.{txt,csv,md}` predate `Luck = Actual − M3`, the
-      `Potential` column (`Actual − M1`), and the `Anticipation` column (`M3 − M2`);
-      regenerate on the box-score default path and re-commit. (Needs a live
-      Fantrax + basketball-reference run.)
+- [x] **Regenerate the season report artifacts** for the reworked Luck family.
+      Done for 2.0.0: `season_report.{txt,csv,md}` regenerated on the box-score
+      default path, now carrying `Luck = Actual − M3`, the `Potential` column
+      (`Actual − M1`), the `Anticipation` column (`M3 − M2`), and `Passivity`
+      (the renamed `M1-M3`).
 - [x] **Regenerate the season report artifacts** on the box-score default and
       re-commit them. Done in 1.1.0: `season_report.{txt,csv,md}` regenerated with
       the full Nash picture (M3 / M1-M3), replacing the stale Fantrax-estimator
