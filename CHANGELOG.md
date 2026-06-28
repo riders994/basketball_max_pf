@@ -6,6 +6,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
+## [2.0.1] - 2026-06-28
+
+### Fixed
+
+- **The season's opening matchup period is now skipped under the `expected`
+  methodology.** "Expected" lineups are built from season-to-date rates as of the
+  period start, so week 1 has no prior games to project from — every team's
+  projected lineup collapsed to near-empty, producing degenerate, uniform
+  M1/M2/M3 (an empty lineup draws all categories versus another empty lineup, and
+  only "wins" TO versus a real one). That period is now excluded from `expected`
+  reports, so its meaningless numbers no longer pollute the season totals. The
+  `hindsight` methodology is unaffected (week 1's own realized box scores exist).
+  Requesting *only* an unprojectable opening week under `expected` now raises a
+  clear `ValueError` instead of returning an all-zero report. The check consults
+  the league calendar, so it short-circuits before any box-score fetching.
+
 ## [2.0.0] - 2026-06-22
 
 Major bump: the report's `Luck` column changes meaning and the `M1-M3` column /
