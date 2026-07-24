@@ -103,3 +103,14 @@ def test_run_end_to_end_with_fake_platform():
         assert run({"platform": "fake"}, weeks=1, boxscores=False)[0].name == "Alpha"
     finally:
         PLATFORMS.pop("fake", None)
+
+
+def test_run_threads_progress_callback():
+    register_platform("fake", lambda login: _FakePlatform())
+    try:
+        calls = []
+        run({"platform": "fake"}, boxscores=False, progress=lambda d, t: calls.append((d, t)))
+        # One tick before any work, then one per team (two teams).
+        assert calls == [(0, 2), (1, 2), (2, 2)]
+    finally:
+        PLATFORMS.pop("fake", None)

@@ -6,7 +6,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
-## [2.0.1] - 2026-06-28
+## [2.1.0] - 2026-07-24
+
+### Added
+
+- **A per-team progress bar on the command line.** The season report ticks a bar
+  on stderr as each team's row is computed — handy because the Nash mutual-ceiling
+  search makes a full run take a while. It's on by default but only draws when
+  stderr is a terminal, so redirected or piped output is untouched; `--no-progress`
+  suppresses it. The library stays terminal-agnostic: `season_report`/`run` take a
+  `progress(completed, total)` callback (`max_pf.progress.bar_callback` supplies the
+  bar), so programmatic callers can plug in their own reporter or none at all.
 
 ### Fixed
 
@@ -119,6 +129,7 @@ head-to-head fantasy basketball.
 - Installable package (`src/` layout, hatchling) with `boxscores` and `yaml`
   extras; 52 unit tests; live-validated against a finished public league.
 
+[2.1.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v2.1.0
 [2.0.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v2.0.0
 [1.1.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v1.1.0
 [1.0.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v1.0.0

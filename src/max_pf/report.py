@@ -172,6 +172,7 @@ def _expected_projectable(platform, period: int) -> bool:
 def season_report(
     platform, slots: list[Slot], periods: list[int] | None = None,
     methodology: str = "expected", objective: str = "catwins", include_nash: bool = True,
+    progress: Callable[[int, int], None] | None = None,
 ) -> list[TeamSeason]:
     """Compute the season summary for every team, sorted by actual points for.
 
@@ -179,6 +180,11 @@ def season_report(
     M3 / Passivity columns — the full picture, and on by default. It is markedly more
     expensive (iterated best response, plus a double-oracle LP for cycling weeks),
     so pass ``include_nash=False`` to skip it for a quicker, M1/M2-only report.
+
+    ``progress``, if given, is a callback invoked ``(completed, total)`` once
+    before any work (``0, total``) and again as each team's row is finished, up to
+    ``total, total``. It's the seam the command line hangs its progress bar on (see
+    :func:`max_pf.progress.bar_callback`); the library itself draws nothing.
 
     Under the ``"expected"`` methodology the season's opening matchup period is
     skipped (it has no prior games to project from; see ``_expected_projectable``).
@@ -195,8 +201,14 @@ def season_report(
                 "Request a later week, or use methodology='hindsight' (realized stats)."
             )
         periods = projectable
-    rows = [build_team_season(platform, tid, periods, slots, methodology, objective, include_nash)
-            for tid in platform.team_ids()]
+    team_ids = platform.team_ids()
+    if progress is not None:
+        progress(0, len(team_ids))
+    rows = []
+    for done, tid in enumerate(team_ids, start=1):
+        rows.append(build_team_season(platform, tid, periods, slots, methodology, objective, include_nash))
+        if progress is not None:
+            progress(done, len(team_ids))
     rows.sort(key=lambda r: r.actual_pf, reverse=True)
     return rows
 
