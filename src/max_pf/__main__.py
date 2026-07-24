@@ -13,9 +13,11 @@ Computes the max-points-for season summary for every team, prints it, and writes
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from .app import load_login, run
+from .progress import bar_callback
 from .report import render_csv, render_markdown, render_table
 
 
@@ -37,12 +39,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-nash", action="store_true",
                         help="skip the Nash mutual ceiling (the M3 / Passivity columns, on by default) "
                              "for a quicker M1/M2-only report")
+    parser.add_argument("--no-progress", action="store_true",
+                        help="suppress the per-team progress bar (shown on stderr by default "
+                             "when stderr is a terminal)")
     args = parser.parse_args(argv)
+
+    # Progress bar by default, but only when stderr is a real terminal — otherwise
+    # the carriage-return redraws would garbage up a log or a piped stream.
+    progress = None
+    if not args.no_progress and sys.stderr.isatty():
+        progress = bar_callback()
 
     login = load_login(args.login)
     rows = run(
         login, weeks=args.weeks, methodology=args.methodology,
         objective=args.objective, boxscores=not args.no_boxscores, nash=not args.no_nash,
+        progress=progress,
     )
 
     print(render_table(rows))

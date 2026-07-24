@@ -151,9 +151,28 @@ def build_team_season(
     )
 
 
+def _expected_projectable(platform, period: int) -> bool:
+    """Whether a matchup period can be projected under the "expected" methodology.
+
+    "Expected" candidate rates are season-to-date as of the period's first day, so
+    the season's *opening* matchup period has no prior games to project from — every
+    team's projected lineup collapses to near-empty, yielding degenerate, uniform
+    M1/M2/M3 (an empty lineup draws all cats vs an empty lineup, and only wins TO vs
+    a real one). Such a period is skipped. The realized "hindsight" methodology is
+    unaffected, as week 1's own box scores exist.
+    """
+    dates = platform.scoring_dates()
+    days = platform.matchup_period_days(period)
+    if not days:
+        return False
+    start = dates[days[0]]
+    return any(d < start for d in dates.values())
+
+
 def season_report(
     platform, slots: list[Slot], periods: list[int] | None = None,
     methodology: str = "expected", objective: str = "catwins", include_nash: bool = True,
+    progress: Callable[[int, int], None] | None = None,
 ) -> list[TeamSeason]:
     """Compute the season summary for every team, sorted by actual points for.
 
@@ -161,10 +180,35 @@ def season_report(
     M3 / Passivity columns — the full picture, and on by default. It is markedly more
     expensive (iterated best response, plus a double-oracle LP for cycling weeks),
     so pass ``include_nash=False`` to skip it for a quicker, M1/M2-only report.
+
+    ``progress``, if given, is a callback invoked ``(completed, total)`` once
+    before any work (``0, total``) and again as each team's row is finished, up to
+    ``total, total``. It's the seam the command line hangs its progress bar on (see
+    :func:`max_pf.progress.bar_callback`); the library itself draws nothing.
+
+    Under the ``"expected"`` methodology the season's opening matchup period is
+    skipped (it has no prior games to project from; see ``_expected_projectable``).
+    If *every* requested period is thus unprojectable, a ``ValueError`` is raised
+    rather than returning an all-zero report.
     """
     periods = periods or platform.matchup_periods()
-    rows = [build_team_season(platform, tid, periods, slots, methodology, objective, include_nash)
-            for tid in platform.team_ids()]
+    if methodology == "expected" and hasattr(platform, "matchup_period_days"):
+        projectable = [p for p in periods if _expected_projectable(platform, p)]
+        if not projectable:
+            raise ValueError(
+                "no requested period is projectable under the 'expected' methodology: "
+                "the season's opening matchup period has no prior games to project from. "
+                "Request a later week, or use methodology='hindsight' (realized stats)."
+            )
+        periods = projectable
+    team_ids = platform.team_ids()
+    if progress is not None:
+        progress(0, len(team_ids))
+    rows = []
+    for done, tid in enumerate(team_ids, start=1):
+        rows.append(build_team_season(platform, tid, periods, slots, methodology, objective, include_nash))
+        if progress is not None:
+            progress(done, len(team_ids))
     rows.sort(key=lambda r: r.actual_pf, reverse=True)
     return rows
 

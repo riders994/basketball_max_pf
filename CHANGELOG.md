@@ -6,6 +6,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [TODO.md](TODO.md).
 
+## [2.1.0] - 2026-07-24
+
+### Added
+
+- **A per-team progress bar on the command line.** The season report ticks a bar
+  on stderr as each team's row is computed — handy because the Nash mutual-ceiling
+  search makes a full run take a while. It's on by default but only draws when
+  stderr is a terminal, so redirected or piped output is untouched; `--no-progress`
+  suppresses it. The library stays terminal-agnostic: `season_report`/`run` take a
+  `progress(completed, total)` callback (`max_pf.progress.bar_callback` supplies the
+  bar), so programmatic callers can plug in their own reporter or none at all.
+
+### Fixed
+
+- **The season's opening matchup period is now skipped under the `expected`
+  methodology.** "Expected" lineups are built from season-to-date rates as of the
+  period start, so week 1 has no prior games to project from — every team's
+  projected lineup collapsed to near-empty, producing degenerate, uniform
+  M1/M2/M3 (an empty lineup draws all categories versus another empty lineup, and
+  only "wins" TO versus a real one). That period is now excluded from `expected`
+  reports, so its meaningless numbers no longer pollute the season totals. The
+  `hindsight` methodology is unaffected (week 1's own realized box scores exist).
+  Requesting *only* an unprojectable opening week under `expected` now raises a
+  clear `ValueError` instead of returning an all-zero report. The check consults
+  the league calendar, so it short-circuits before any box-score fetching.
+
 ## [2.0.0] - 2026-06-22
 
 Major bump: the report's `Luck` column changes meaning and the `M1-M3` column /
@@ -103,6 +129,7 @@ head-to-head fantasy basketball.
 - Installable package (`src/` layout, hatchling) with `boxscores` and `yaml`
   extras; 52 unit tests; live-validated against a finished public league.
 
+[2.1.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v2.1.0
 [2.0.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v2.0.0
 [1.1.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v1.1.0
 [1.0.0]: https://github.com/riders994/basketball_max_pf/releases/tag/v1.0.0

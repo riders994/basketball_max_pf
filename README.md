@@ -125,7 +125,11 @@ python -m max_pf league.json
 python -m max_pf league.yaml --weeks 1-6 --methodology hindsight --out reports/half1
 ```
 
-It prints the table and writes `<out>.csv` and `<out>.md`.
+It prints the table and writes `<out>.csv` and `<out>.md`. While it works, a
+per-team progress bar animates on stderr (the season report can take a while with
+the Nash search on); it appears only when stderr is a terminal, so redirected or
+piped output stays clean, and `--no-progress` turns it off. The bar is stderr-only,
+so `python -m max_pf league.json > table.txt` still captures just the table.
 
 ## Findings
 

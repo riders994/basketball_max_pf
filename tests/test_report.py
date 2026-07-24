@@ -1,5 +1,8 @@
 import csv
 import io
+from datetime import date
+
+import pytest
 
 from max_pf.models import PlayerLine
 from max_pf.optimize import Candidate, Slot
@@ -75,6 +78,52 @@ class FakePlatform:
 
     def period_candidates(self, team_id, period, methodology="expected"):
         return self._cand[(team_id, period)]
+
+
+class TwoPeriodPlatform(FakePlatform):
+    """Two matchup periods; period 1 is the season opener (no prior scoring days).
+
+    Adds the date surface ``season_report`` consults to skip an unprojectable
+    opening period under the "expected" methodology.
+    """
+
+    def __init__(self):
+        super().__init__()
+        for key in (("A", 1), ("B", 1)):
+            self._actual[(key[0], 2)] = self._actual[key]
+            self._cand[(key[0], 2)] = self._cand[key]
+        # Daily period 1 -> period 1's only day; daily period 2 -> period 2's day.
+        self._dates = {1: date(2024, 10, 22), 2: date(2024, 10, 29)}
+
+    def matchup_periods(self):
+        return [1, 2]
+
+    def scoring_dates(self):
+        return dict(self._dates)
+
+    def matchup_period_days(self, period):
+        return [period]  # one daily period per matchup period, same number
+
+
+def test_season_report_skips_unprojectable_opening_period_expected():
+    # Period 1 (season opener) has no prior scoring day -> skipped under "expected";
+    # only period 2 is counted, so GP == 1 even though two periods were requested.
+    rows = season_report(TwoPeriodPlatform(), SLOTS, periods=[1, 2], include_nash=False)
+    assert all(r.periods == 1 for r in rows)
+
+
+def test_season_report_errors_when_only_opening_period_requested_expected():
+    with pytest.raises(ValueError, match="opening matchup period"):
+        season_report(TwoPeriodPlatform(), SLOTS, periods=[1], include_nash=False)
+
+
+def test_season_report_keeps_opening_period_under_hindsight():
+    # Hindsight uses week 1's own realized stats, so the opener is not skipped.
+    rows = season_report(
+        TwoPeriodPlatform(), SLOTS, periods=[1, 2],
+        methodology="hindsight", include_nash=False,
+    )
+    assert all(r.periods == 2 for r in rows)
 
 
 def test_season_report_sorted_by_actual():

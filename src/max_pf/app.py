@@ -110,6 +110,7 @@ def run(
     boxscores: bool = True,
     nash: bool = True,
     cache_dir: str | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> list[TeamSeason]:
     """Build the platform from ``login`` and return the season report rows.
 
@@ -125,6 +126,9 @@ def run(
             — it runs iterated best response (and a double-oracle LP for cycling
             weeks) per team.
         cache_dir: override the box-score on-disk cache location.
+        progress: optional ``(completed, total)`` callback ticked once per team as
+            the report is built (the command line passes a stderr progress bar; see
+            :func:`max_pf.progress.bar_callback`). ``None`` reports nothing.
 
     Returns the per-team :class:`~max_pf.report.TeamSeason` rows, sorted by actual
     points for; render with ``max_pf.render_table`` / ``render_csv`` /
@@ -139,4 +143,5 @@ def run(
     return season_report(
         platform, slots, periods=parse_weeks(weeks),
         methodology=methodology, objective=objective, include_nash=nash,
+        progress=progress,
     )
